@@ -11,6 +11,21 @@ import bandits.DatabaseConnection;
 
 public class UCBAir {
 
+	static class UCBValue {
+		double totalReward;
+		double selectedTimes;
+		double value;
+
+		void increaseReward(int reward) {
+			totalReward += reward;
+		}
+
+		void updateValue(int n) {
+			// TODO add V to the formula
+			value = (totalReward / selectedTimes) + (3 * Math.log(n) / selectedTimes);
+		}
+	}
+
 	public static void main(String[] args) throws IOException, SQLException {
 		try (DatabaseConnection dc = new DatabaseConnection()) {
 			try (Statement articleSelect = dc.getConnection().createStatement(java.sql.ResultSet.TYPE_FORWARD_ONLY,
@@ -28,7 +43,7 @@ public class UCBAir {
 				int n = 0; // parameter n from UCB-AIR algorithm
 				double beta = 1; // parameter beta from UCB-AIR algorithm
 				int reward = 0;
-				Map<Integer, Double> idValue = new HashMap<Integer, Double>();
+				Map<Integer, UCBValue> idValue = new HashMap<Integer, UCBValue>();
 				while (joinCount < 10) {
 					n++;
 					// get next unseen tuple r from R and update value of k
@@ -46,21 +61,11 @@ public class UCBAir {
 							return;
 						}
 						// join r with random tuple s from S
-						if (linkSelectResult.next()) {
-							int linkId = linkSelectResult.getInt("id");
-							String joinSql = "select article_id, link_id from tbl_article_wiki13 a, tbl_article_link_09 al, "
-									+ "tbl_link_09 l where a.id = al.article_id and al.link_id = l.id and a.id = "
-									+ articleId + "l.id = " + linkId + ";";
-							ResultSet joinResult = joinStatement.executeQuery(joinSql);
-							// TODO should we drop the indexes on tables?
-							reward = joinResult.getFetchSize();
-							updateUCBValues(idValue, articleId, reward, n);
-						} else {
-							System.err.println("Link table reached its end!");
-							return;
-						}
+						executeOneJoin(joinStatement, linkSelectResult, n, idValue, articleId);
 					} else {
-						// do UCB-V
+						int articleId = findBestArm(idValue);
+						executeOneJoin(joinStatement, linkSelectResult, n, idValue, articleId);
+
 					}
 				}
 			}
@@ -68,8 +73,51 @@ public class UCBAir {
 		}
 	}
 
-	static void updateUCBValues(Map<Integer, Double> idValue, int id, int reward, int n) {
+	static void executeOneJoin(Statement joinStatement, ResultSet linkSelectResult, int n,
+			Map<Integer, UCBValue> idValue, int articleId) throws SQLException {
+		int reward;
+		if (linkSelectResult.next()) {
+			int linkId = linkSelectResult.getInt("id");
+			reward = attemptJoin(joinStatement, articleId, linkId);
+			updateUCBValues(idValue, articleId, reward, n);
+		} else {
+			System.err.println("Link table reached its end!");
+			System.exit(-1); // TODO improve this
+		}
+	}
 
+	static int attemptJoin(Statement joinStatement, int articleId, int linkId) throws SQLException {
+		int reward;
+		String joinSql = "select article_id, link_id from tbl_article_wiki13 a, tbl_article_link_09 al, "
+				+ "tbl_link_09 l where a.id = al.article_id and al.link_id = l.id and a.id = " + articleId + "l.id = "
+				+ linkId + ";";
+		ResultSet joinResult = joinStatement.executeQuery(joinSql);
+		// TODO should we drop the indexes on tables?
+		reward = joinResult.getFetchSize();
+		return reward;
+	}
+
+	static void updateUCBValues(Map<Integer, UCBValue> idValue, int selectedId, int reward, int n) {
+		for (int id : idValue.keySet()) {
+			UCBValue value = idValue.get(id);
+			if (id == selectedId) {
+				value.increaseReward(reward);
+			}
+			value.updateValue(n);
+		}
+	}
+
+	static int findBestArm(Map<Integer, UCBValue> idValue) {
+		double maxValue = -1;
+		int bestId = -1;
+		for (int id : idValue.keySet()) {
+			double value = idValue.get(id).value;
+			if (maxValue < value) {
+				maxValue = value;
+				bestId = id;
+			}
+		}
+		return bestId;
 	}
 
 }

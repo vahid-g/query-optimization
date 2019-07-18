@@ -12,6 +12,7 @@ import java.util.Set;
 public class UCBAir {
 
 	static int linkCounter = 0;
+	static int linkScans = 0;
 
 	static class UCBValue {
 		double totalReward = 0;
@@ -67,8 +68,6 @@ public class UCBAir {
 					Statement linkSelect = dc.getConnection().createStatement(ResultSet.TYPE_FORWARD_ONLY,
 							ResultSet.CONCUR_READ_ONLY);
 					Statement joinStatement = dc.getConnection().createStatement()) {
-				// articleSelect.setFetchSize(Integer.MIN_VALUE);
-				// linkSelect.setFetchSize(Integer.MIN_VALUE);
 				ResultSet articleSelectResult = articleSelect.executeQuery("SELECT id FROM tbl_article_wiki13;");
 				ResultSet linkSelectResult = linkSelect.executeQuery("SELECT id FROM tbl_link_09;");
 				// topk join over R and S
@@ -85,7 +84,6 @@ public class UCBAir {
 					if (k < Math.sqrt(n)) {
 						while (articleSelectResult.next()) {
 							articleId = articleSelectResult.getInt("id");
-//							System.out.println("read article " + articleId);
 							if (!idValue.containsKey(articleId)) {
 								k++;
 								break;
@@ -102,6 +100,8 @@ public class UCBAir {
 					jr = attemptJoinAndUpdate(joinStatement, linkSelectResult, n, idValue, articleId);
 					if (jr != null) {
 						results.add(jr);
+					} else if (linkScans > 10) {
+						break;
 					}
 				}
 				System.out.println(results);
@@ -115,22 +115,24 @@ public class UCBAir {
 		if (linkSelectResult.next()) {
 			linkCounter++;
 			int linkId = linkSelectResult.getInt("id");
-//			System.out.println("read link: " + linkId);
 			String joinSql = "select article_id, link_id from tbl_article_wiki13 a, tbl_article_link_09 al, "
 					+ "tbl_link_09 l where a.id = al.article_id and al.link_id = l.id and a.id = " + articleId
 					+ " and l.id = " + linkId + ";";
-			System.out.println("attempting join: " + articleId + "-" + linkId);
 			ResultSet joinResult = joinStatement.executeQuery(joinSql);
 			// TODO should we drop the indexes on tables?
 			int reward = joinResult.getFetchSize();
-//			System.out.println("reward: " + reward);
 			updateUCBValues(idValue, articleId, reward, n);
 			if (reward > 0) {
 				return new JoinResult(articleId, linkId);
 			}
 		} else {
 			System.err.println("Link table reached its end!");
-			System.exit(-1);
+			System.out.println("link scans: " + linkScans);
+			linkScans++;
+			if (linkScans > 10) {
+				return null;
+			}
+			linkSelectResult.first(); // this may skip the very first tuple
 		}
 		return null;
 	}

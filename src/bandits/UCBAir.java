@@ -5,50 +5,76 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
-
-import bandits.DatabaseConnection;
+import java.util.Set;
 
 public class UCBAir {
 
 	static class UCBValue {
-		double totalReward;
-		double selectedTimes;
-		double value;
+		double totalReward = 0;
+		double totalSquaredReward = 0;
+		double selectedTimes = 0;
+		double value = 0;
 
 		void increaseReward(int reward) {
 			totalReward += reward;
+			totalSquaredReward += Math.pow(reward, 2);
 		}
 
 		void updateValue(int n) {
-			// TODO add V to the formula
-			value = (totalReward / selectedTimes) + (3 * Math.log(n) / selectedTimes);
+			double meanReward = (totalReward / selectedTimes);
+			double meanSquredReward = (totalSquaredReward / selectedTimes);
+			double V = (Math.pow(meanReward, 2) - meanSquredReward) / selectedTimes;
+			value = meanReward + Math.sqrt(2 * V * Math.log(n) / selectedTimes) + (3 * Math.log(n) / selectedTimes);
+		}
+
+	}
+
+	static class JoinResult {
+		int articleId;
+		int linkId;
+
+		public JoinResult(int articleId, int linkId) {
+			this.articleId = articleId;
+			this.linkId = linkId;
+		}
+
+		@Override
+		public boolean equals(Object o) {
+			if (o == this) {
+				return true;
+			}
+			if (!(o instanceof JoinResult)) {
+				return false;
+			}
+			JoinResult jr = (JoinResult) o;
+			return jr.articleId == this.articleId && jr.linkId == this.linkId;
 		}
 	}
 
 	public static void main(String[] args) throws IOException, SQLException {
 		try (DatabaseConnection dc = new DatabaseConnection()) {
-			try (Statement articleSelect = dc.getConnection().createStatement(java.sql.ResultSet.TYPE_FORWARD_ONLY,
-					java.sql.ResultSet.CONCUR_READ_ONLY);
-					Statement linkSelect = dc.getConnection().createStatement(java.sql.ResultSet.TYPE_FORWARD_ONLY,
-							java.sql.ResultSet.CONCUR_READ_ONLY);
+			try (Statement articleSelect = dc.getConnection().createStatement(ResultSet.TYPE_FORWARD_ONLY,
+					ResultSet.CONCUR_READ_ONLY);
+					Statement linkSelect = dc.getConnection().createStatement(ResultSet.TYPE_FORWARD_ONLY,
+							ResultSet.CONCUR_READ_ONLY);
 					Statement joinStatement = dc.getConnection().createStatement()) {
 				articleSelect.setFetchSize(Integer.MIN_VALUE);
 				linkSelect.setFetchSize(Integer.MIN_VALUE);
 				ResultSet articleSelectResult = articleSelect.executeQuery("SELECT id FROM tbl_article_wiki13;");
 				ResultSet linkSelectResult = linkSelect.executeQuery("SELECT id FROM tbl_link_09;");
 				// topk join over R and S
-				int joinCount = 0;
 				int k = 0; // parameter k from UCB-AIR algorithm
 				int n = 0; // parameter n from UCB-AIR algorithm
-				double beta = 1; // parameter beta from UCB-AIR algorithm
-				int reward = 0;
 				Map<Integer, UCBValue> idValue = new HashMap<Integer, UCBValue>();
-				while (joinCount < 10) {
+				Set<JoinResult> results = new HashSet<JoinResult>();
+				while (results.size() < 5) {
 					n++;
+					JoinResult jr = null;
 					// get next unseen tuple r from R and update value of k
-					if (k < Math.pow(n, (beta / beta + 1.0))) {
-						int articleId = -1;
+					int articleId = -1;
+					if (k < Math.sqrt(n)) {
 						while (articleSelectResult.next()) {
 							articleId = articleSelectResult.getInt("id");
 							if (!idValue.containsKey(articleId)) {
@@ -58,14 +84,18 @@ public class UCBAir {
 						}
 						if (articleId == -1) {
 							System.err.println("Article table reached its end!");
-							return;
+							break;
 						}
 						// join r with random tuple s from S
-						executeOneJoin(joinStatement, linkSelectResult, n, idValue, articleId);
 					} else {
-						int articleId = findBestArm(idValue);
-						executeOneJoin(joinStatement, linkSelectResult, n, idValue, articleId);
-
+						articleId = findBestArm(idValue);
+					}
+					jr = attemptJoinAndUpdate(joinStatement, linkSelectResult, n, idValue, articleId);
+					if (jr != null) {
+						results.add(jr);
+					} else {
+						System.err.println("null join result");
+						break;
 					}
 				}
 			}
@@ -73,34 +103,33 @@ public class UCBAir {
 		}
 	}
 
-	static void executeOneJoin(Statement joinStatement, ResultSet linkSelectResult, int n,
+	static JoinResult attemptJoinAndUpdate(Statement joinStatement, ResultSet linkSelectResult, int n,
 			Map<Integer, UCBValue> idValue, int articleId) throws SQLException {
-		int reward;
 		if (linkSelectResult.next()) {
 			int linkId = linkSelectResult.getInt("id");
-			reward = attemptJoin(joinStatement, articleId, linkId);
+			String joinSql = "select article_id, link_id from tbl_article_wiki13 a, tbl_article_link_09 al, "
+					+ "tbl_link_09 l where a.id = al.article_id and al.link_id = l.id and a.id = " + articleId
+					+ "l.id = " + linkId + ";";
+			ResultSet joinResult = joinStatement.executeQuery(joinSql);
+			// TODO should we drop the indexes on tables?
+			int reward = joinResult.getFetchSize();
 			updateUCBValues(idValue, articleId, reward, n);
+			return new JoinResult(articleId, linkId);
 		} else {
 			System.err.println("Link table reached its end!");
-			System.exit(-1); // TODO improve this
+			return null;
 		}
 	}
 
-	static int attemptJoin(Statement joinStatement, int articleId, int linkId) throws SQLException {
-		int reward;
-		String joinSql = "select article_id, link_id from tbl_article_wiki13 a, tbl_article_link_09 al, "
-				+ "tbl_link_09 l where a.id = al.article_id and al.link_id = l.id and a.id = " + articleId + "l.id = "
-				+ linkId + ";";
-		ResultSet joinResult = joinStatement.executeQuery(joinSql);
-		// TODO should we drop the indexes on tables?
-		reward = joinResult.getFetchSize();
-		return reward;
-	}
-
 	static void updateUCBValues(Map<Integer, UCBValue> idValue, int selectedId, int reward, int n) {
+		if (!idValue.containsKey(selectedId)) {
+			UCBValue newValue = new UCBValue();
+			idValue.put(selectedId, newValue);
+		}
 		for (int id : idValue.keySet()) {
 			UCBValue value = idValue.get(id);
 			if (id == selectedId) {
+				value.selectedTimes++;
 				value.increaseReward(reward);
 			}
 			value.updateValue(n);

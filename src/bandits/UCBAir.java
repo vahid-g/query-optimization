@@ -13,6 +13,7 @@ public class UCBAir {
 
 	static int linkCounter = 0;
 	static int linkScans = 0;
+	final static int LINK_SCAN_THRESHOLD = 1;
 
 	static class UCBValue {
 		double totalReward = 0;
@@ -63,13 +64,13 @@ public class UCBAir {
 
 	public static void main(String[] args) throws IOException, SQLException {
 		try (DatabaseConnection dc = new DatabaseConnection()) {
-			try (Statement articleSelect = dc.getConnection().createStatement(ResultSet.TYPE_FORWARD_ONLY,
-					ResultSet.CONCUR_READ_ONLY);
-					Statement linkSelect = dc.getConnection().createStatement(ResultSet.TYPE_FORWARD_ONLY,
-							ResultSet.CONCUR_READ_ONLY);
+			// ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY
+			try (Statement articleSelect = dc.getConnection().createStatement();
+					Statement linkSelect = dc.getConnection().createStatement();
 					Statement joinStatement = dc.getConnection().createStatement()) {
-				ResultSet articleSelectResult = articleSelect.executeQuery("SELECT id FROM tbl_article_wiki13;");
-				ResultSet linkSelectResult = linkSelect.executeQuery("SELECT id FROM tbl_link_09;");
+				articleSelect.setFetchSize(10);
+				ResultSet articleSelectResult = articleSelect.executeQuery("SELECT article_id FROM article_ids;");
+				ResultSet linkSelectResult = linkSelect.executeQuery("SELECT link_id FROM link_ids;");
 				// topk join over R and S
 				int k = 0; // parameter k from UCB-AIR algorithm
 				int n = 0; // parameter n from UCB-AIR algorithm
@@ -100,7 +101,7 @@ public class UCBAir {
 					jr = attemptJoinAndUpdate(joinStatement, linkSelectResult, n, idValue, articleId);
 					if (jr != null) {
 						results.add(jr);
-					} else if (linkScans > 10) {
+					} else if (linkScans >= LINK_SCAN_THRESHOLD) {
 						break;
 					}
 				}
@@ -129,10 +130,10 @@ public class UCBAir {
 			System.err.println("Link table reached its end!");
 			System.out.println("link scans: " + linkScans);
 			linkScans++;
-			if (linkScans > 10) {
+			if (linkScans >= LINK_SCAN_THRESHOLD) {
 				return null;
 			}
-			linkSelectResult.first(); // this may skip the very first tuple
+			// linkSelectResult.first(); // this may skip the very first tuple
 		}
 		return null;
 	}

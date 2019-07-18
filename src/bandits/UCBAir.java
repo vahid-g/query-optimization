@@ -11,6 +11,8 @@ import java.util.Set;
 
 public class UCBAir {
 
+	static int linkCounter = 0;
+
 	static class UCBValue {
 		double totalReward = 0;
 		double totalSquaredReward = 0;
@@ -51,6 +53,11 @@ public class UCBAir {
 			JoinResult jr = (JoinResult) o;
 			return jr.articleId == this.articleId && jr.linkId == this.linkId;
 		}
+
+		@Override
+		public String toString() {
+			return articleId + " - " + linkId;
+		}
 	}
 
 	public static void main(String[] args) throws IOException, SQLException {
@@ -60,8 +67,8 @@ public class UCBAir {
 					Statement linkSelect = dc.getConnection().createStatement(ResultSet.TYPE_FORWARD_ONLY,
 							ResultSet.CONCUR_READ_ONLY);
 					Statement joinStatement = dc.getConnection().createStatement()) {
-				articleSelect.setFetchSize(Integer.MIN_VALUE);
-				linkSelect.setFetchSize(Integer.MIN_VALUE);
+				// articleSelect.setFetchSize(Integer.MIN_VALUE);
+				// linkSelect.setFetchSize(Integer.MIN_VALUE);
 				ResultSet articleSelectResult = articleSelect.executeQuery("SELECT id FROM tbl_article_wiki13;");
 				ResultSet linkSelectResult = linkSelect.executeQuery("SELECT id FROM tbl_link_09;");
 				// topk join over R and S
@@ -69,6 +76,7 @@ public class UCBAir {
 				int n = 0; // parameter n from UCB-AIR algorithm
 				Map<Integer, UCBValue> idValue = new HashMap<Integer, UCBValue>();
 				Set<JoinResult> results = new HashSet<JoinResult>();
+
 				while (results.size() < 5) {
 					n++;
 					JoinResult jr = null;
@@ -77,6 +85,7 @@ public class UCBAir {
 					if (k < Math.sqrt(n)) {
 						while (articleSelectResult.next()) {
 							articleId = articleSelectResult.getInt("id");
+//							System.out.println("read article " + articleId);
 							if (!idValue.containsKey(articleId)) {
 								k++;
 								break;
@@ -93,32 +102,37 @@ public class UCBAir {
 					jr = attemptJoinAndUpdate(joinStatement, linkSelectResult, n, idValue, articleId);
 					if (jr != null) {
 						results.add(jr);
-					} else {
-						System.err.println("null join result");
-						break;
 					}
 				}
+				System.out.println(results);
+				System.out.println("read articles and links: " + k + ", " + linkCounter);
 			}
-
 		}
 	}
 
 	static JoinResult attemptJoinAndUpdate(Statement joinStatement, ResultSet linkSelectResult, int n,
 			Map<Integer, UCBValue> idValue, int articleId) throws SQLException {
 		if (linkSelectResult.next()) {
+			linkCounter++;
 			int linkId = linkSelectResult.getInt("id");
+//			System.out.println("read link: " + linkId);
 			String joinSql = "select article_id, link_id from tbl_article_wiki13 a, tbl_article_link_09 al, "
 					+ "tbl_link_09 l where a.id = al.article_id and al.link_id = l.id and a.id = " + articleId
-					+ "l.id = " + linkId + ";";
+					+ " and l.id = " + linkId + ";";
+			System.out.println("attempting join: " + articleId + "-" + linkId);
 			ResultSet joinResult = joinStatement.executeQuery(joinSql);
 			// TODO should we drop the indexes on tables?
 			int reward = joinResult.getFetchSize();
+//			System.out.println("reward: " + reward);
 			updateUCBValues(idValue, articleId, reward, n);
-			return new JoinResult(articleId, linkId);
+			if (reward > 0) {
+				return new JoinResult(articleId, linkId);
+			}
 		} else {
 			System.err.println("Link table reached its end!");
-			return null;
+			System.exit(-1);
 		}
+		return null;
 	}
 
 	static void updateUCBValues(Map<Integer, UCBValue> idValue, int selectedId, int reward, int n) {

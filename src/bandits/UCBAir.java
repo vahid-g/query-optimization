@@ -92,7 +92,7 @@ public class UCBAir {
 					int articleId = -1;
 					if (k <= Math.sqrt(n)) {
 						while (articleSelectResult.next()) {
-							articleId = articleSelectResult.getInt("id");
+							articleId = articleSelectResult.getInt("article_id");
 							if (!idValue.containsKey(articleId)) {
 								k++;
 								break;
@@ -125,7 +125,7 @@ public class UCBAir {
 			Map<Integer, UCBValue> idValue, int articleId) throws SQLException {
 		if (linkSelectResult.next()) {
 			scannedLinksNumber++;
-			int linkId = linkSelectResult.getInt("id");
+			int linkId = linkSelectResult.getInt("link_id");
 			String joinSql = "select article_id, link_id from tbl_article_wiki13 a, tbl_article_link_09 al, "
 					+ "tbl_link_09 l where a.id = al.article_id and al.link_id = l.id and a.id = " + articleId
 					+ " and l.id = " + linkId + ";";

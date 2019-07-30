@@ -22,7 +22,9 @@ public class DatabaseConnection implements Closeable {
 		connectionProps.put("user", config.get("username"));
 		connectionProps.put("password", config.get("password"));
 		try {
+			closeConnection();
 			connection = DriverManager.getConnection(config.getProperty("wiki-db"), connectionProps);
+			System.out.println("Database connected!");
 		} catch (SQLException e) {
 			throw e;
 		}

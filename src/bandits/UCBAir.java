@@ -1,6 +1,7 @@
 package bandits;
 
 import java.io.IOException;
+import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -63,15 +64,12 @@ public class UCBAir {
 	}
 
 	public static void main(String[] args) throws IOException, SQLException {
-		try (DatabaseConnection dc = new DatabaseConnection();
-				DatabaseConnection dc2 = new DatabaseConnection();
-				DatabaseConnection dc3 = new DatabaseConnection();) {
-			dc.getConnection().setAutoCommit(false);
-			try (Statement articleSelect = dc.getConnection().createStatement(ResultSet.CONCUR_READ_ONLY,
-					ResultSet.TYPE_FORWARD_ONLY);
-					Statement linkSelect = dc2.getConnection().createStatement(ResultSet.CONCUR_READ_ONLY,
-							ResultSet.TYPE_FORWARD_ONLY);
-					Statement joinStatement = dc3.getConnection().createStatement()) {
+		try (Connection connection1 = DatabaseManager.createConnection();
+				Connection connection2 = DatabaseManager.createConnection();
+				Connection connection3 = DatabaseManager.createConnection()) {
+			try (Statement articleSelect = connection1.createStatement();
+					Statement linkSelect = connection2.createStatement();
+					Statement joinStatement = connection3.createStatement()) {
 				articleSelect.setFetchSize(Integer.MIN_VALUE);
 				linkSelect.setFetchSize(Integer.MIN_VALUE);
 				ResultSet articleSelectResult = articleSelect.executeQuery("SELECT article_id FROM article_ids;");
@@ -81,10 +79,9 @@ public class UCBAir {
 				int n = 0; // parameter n from UCB-AIR algorithm
 				Map<Integer, UCBValue> idValue = new HashMap<Integer, UCBValue>();
 				Set<JoinResult> results = new HashSet<JoinResult>();
-				System.out.println("entering the loop");
-				while (results.size() < 5) {
-					if (scannedLinksNumber % 10000 == 0) {
-						System.out.println("scanner " + scannedLinksNumber + "links");
+				while (results.size() < 3) {
+					if (scannedLinksNumber % 100000 == 0) {
+						System.out.println("Scanned " + scannedLinksNumber + " links");
 					}
 					n++;
 					JoinResult jr = null;
@@ -92,7 +89,7 @@ public class UCBAir {
 					int articleId = -1;
 					if (k <= Math.sqrt(n)) {
 						while (articleSelectResult.next()) {
-							articleId = articleSelectResult.getInt("article_id");
+							articleId = articleSelectResult.getInt(1);
 							if (!idValue.containsKey(articleId)) {
 								k++;
 								break;
@@ -104,7 +101,6 @@ public class UCBAir {
 						}
 						// join r with random tuple s from S
 					} else {
-						System.out.println("find best arm");
 						articleId = findBestArm(idValue);
 					}
 					jr = attemptJoinAndUpdate(joinStatement, linkSelectResult, n, idValue, articleId);
@@ -125,7 +121,7 @@ public class UCBAir {
 			Map<Integer, UCBValue> idValue, int articleId) throws SQLException {
 		if (linkSelectResult.next()) {
 			scannedLinksNumber++;
-			int linkId = linkSelectResult.getInt("link_id");
+			int linkId = linkSelectResult.getInt(1);
 			String joinSql = "select article_id, link_id from tbl_article_wiki13 a, tbl_article_link_09 al, "
 					+ "tbl_link_09 l where a.id = al.article_id and al.link_id = l.id and a.id = " + articleId
 					+ " and l.id = " + linkId + ";";

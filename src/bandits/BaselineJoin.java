@@ -43,20 +43,18 @@ public class BaselineJoin {
 
 	public static void main(String[] args) throws IOException, SQLException {
 		try (Connection connection1 = DatabaseManager.createConnection();
-				Connection connection2 = DatabaseManager.createConnection();
-				Connection connection3 = DatabaseManager.createConnection()) {
+				Connection connection2 = DatabaseManager.createConnection()) {
 			try (Statement articleSelect = connection1.createStatement();
-					Statement linkSelect = connection2.createStatement();
-					Statement joinStatement = connection3.createStatement()) {
+					Statement linkSelect = connection2.createStatement()) {
 				articleSelect.setFetchSize(Integer.MIN_VALUE);
 				linkSelect.setFetchSize(Integer.MIN_VALUE);
 				ResultSet articleSelectResult = articleSelect.executeQuery("SELECT article_id FROM article_ids;");
-				ResultSet linkSelectResult = linkSelect.executeQuery("SELECT link_id FROM article_ids_2;");
+				ResultSet linkSelectResult = linkSelect.executeQuery("SELECT article_id FROM article_ids_2;");
 				int scannedArticleNumber = 0;
 				Set<Integer> seenTuplesSet = new HashSet<Integer>();
 				Set<JoinResult> results = new HashSet<JoinResult>();
-				while (results.size() < 1000) {
-					if (scannedLinksNumber % 100000 == 0) {
+				while (results.size() < 100) {
+					if (scannedLinksNumber % 1000 == 0) {
 						System.out.println("Scanned " + scannedLinksNumber + " links");
 					}
 					articleSelectResult.next();

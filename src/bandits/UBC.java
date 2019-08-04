@@ -25,8 +25,6 @@ public class UBC {
 	static int ARTICLE_NUMBERS = 2666491;
 
 	public static void main(String[] args) {
-		// TODO check index size really
-		List<Integer> joinResults = new ArrayList<Integer>();
 		try (Connection conn = DatabaseManager.createConnection()) {
 			try (Statement linkSelect = conn.createStatement()) {
 				String linkSelectSql = "select article_id from tbl_article_link_09";
@@ -34,11 +32,13 @@ public class UBC {
 				for (int i = 0; i < arms.length; i++) {
 					arms[i] = new ArmInfo();
 				}
+				linkSelect.setFetchSize(Integer.MIN_VALUE);
 				ResultSet linkResultSet = linkSelect.executeQuery(linkSelectSql);
 				System.out.println("init completed");
-				while (linkResultSet.next()) {
+				List<Integer> joinResults = new ArrayList<Integer>();
+				while (linkResultSet.next() && joinResults.size() < 10) {
 					if (totalArmPulls % 1000 == 0) {
-						System.out.println("processed " + totalArmPulls + " arms");
+						System.out.println("processed " + totalArmPulls + " links");
 					}
 					totalArmPulls++;
 					int joiningArticleId = linkResultSet.getInt(1);

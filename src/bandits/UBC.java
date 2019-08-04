@@ -35,14 +35,16 @@ public class UBC {
 					arms[i] = new ArmInfo();
 				}
 				ResultSet linkResultSet = linkSelect.executeQuery(linkSelectSql);
+				System.out.println("init completed");
 				while (linkResultSet.next()) {
-					if (totalArmPulls % 10000 == 0) {
+					if (totalArmPulls % 1000 == 0) {
 						System.out.println("processed " + totalArmPulls + " arms");
 					}
 					totalArmPulls++;
 					int joiningArticleId = linkResultSet.getInt(1);
 					arms[joiningArticleId].reward++;
 					int bestArmIndex = pickBestArmIndexGreedy(arms);
+					arms[bestArmIndex].armPullCount++;
 					if (bestArmIndex == joiningArticleId) {
 						joinResults.add(bestArmIndex);
 						// TODO actual join

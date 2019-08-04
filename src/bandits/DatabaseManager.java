@@ -20,7 +20,7 @@ public class DatabaseManager {
 		connectionProps.put("password", config.get("password"));
 		conn = DriverManager.getConnection(config.getProperty("wiki-db"), connectionProps);
 		conn.setAutoCommit(false);
-		System.out.println("Datbase connection created.");
+		System.out.println("Database connection created.");
 		return conn;
 	}
 }

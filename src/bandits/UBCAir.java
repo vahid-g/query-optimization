@@ -10,11 +10,10 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
-public class UCBAir2 {
+public class UBCAir {
 
 	static int scannedLinksNumber = 0;
 	static int linkTableScansNumber = 0;
-	static int scannedArticleNumber = 0;
 	final static int LINK_SCAN_THRESHOLD = 1;
 
 	static class UCBValue {
@@ -66,32 +65,30 @@ public class UCBAir2 {
 
 	public static void main(String[] args) throws IOException, SQLException {
 		try (Connection connection1 = DatabaseManager.createConnection();
-				Connection connection2 = DatabaseManager.createConnection()) {
+				Connection connection2 = DatabaseManager.createConnection();
+				Connection connection3 = DatabaseManager.createConnection()) {
 			try (Statement articleSelect = connection1.createStatement();
-					Statement linkSelect = connection2.createStatement()) {
+					Statement linkSelect = connection2.createStatement();
+					Statement joinStatement = connection3.createStatement()) {
 				articleSelect.setFetchSize(Integer.MIN_VALUE);
 				linkSelect.setFetchSize(Integer.MIN_VALUE);
 				ResultSet articleSelectResult = articleSelect.executeQuery("SELECT article_id FROM article_ids;");
-				// ResultSet linkSelectResult = linkSelect.executeQuery("SELECT link_id FROM
-				// link_ids;");
-				ResultSet linkSelectResult = linkSelect.executeQuery("SELECT article_id FROM article_ids_2;");
+				ResultSet linkSelectResult = linkSelect.executeQuery("SELECT link_id FROM link_ids;");
 				// topk join over R and S
 				int k = 0; // parameter k from UCB-AIR algorithm
 				int n = 0; // parameter n from UCB-AIR algorithm
 				Map<Integer, UCBValue> idValue = new HashMap<Integer, UCBValue>();
 				Set<JoinResult> results = new HashSet<JoinResult>();
-				while (results.size() < 100) {
+				while (results.size() < 3) {
 					if (scannedLinksNumber % 100000 == 0) {
-						System.out.println("scanned links: " + scannedLinksNumber);
-						System.out.println("scanned articles: " + scannedArticleNumber);
-						System.out.println("index size: " + idValue.size());
+						System.out.println("Scanned " + scannedLinksNumber + " links");
 					}
 					n++;
+					JoinResult jr = null;
 					// get next unseen tuple r from R and update value of k
 					int articleId = -1;
 					if (k <= Math.sqrt(n)) {
 						while (articleSelectResult.next()) {
-							scannedArticleNumber++;
 							articleId = articleSelectResult.getInt(1);
 							if (!idValue.containsKey(articleId)) {
 								k++;
@@ -106,24 +103,45 @@ public class UCBAir2 {
 					} else {
 						articleId = findBestArm(idValue);
 					}
-					// jr = attemptJoinAndUpdate(linkSelectResult, n, idValue, articleId);
-					if (linkSelectResult.next()) {
-						scannedLinksNumber++;
-						int linkId = linkSelectResult.getInt(1);
-						if (articleId == linkId) {
-							results.add(new JoinResult(articleId, linkId));
-						}
-						updateUCBValues(idValue, linkId, +1, n);
-					} else {
-						System.out.println("links does not return next tuple");
+					jr = attemptJoinAndUpdate(joinStatement, linkSelectResult, n, idValue, articleId);
+					if (jr != null) {
+						System.out.println("successful join!");
+						results.add(jr);
+					} else if (linkTableScansNumber >= LINK_SCAN_THRESHOLD) {
 						break;
 					}
 				}
 				System.out.println(results);
-				System.out.println("scanned links: " + scannedLinksNumber);
-				System.out.println("scanned articles: " + scannedArticleNumber);
+				System.out.println("read articles and links: " + k + ", " + scannedLinksNumber);
 			}
 		}
+	}
+
+	static JoinResult attemptJoinAndUpdate(Statement joinStatement, ResultSet linkSelectResult, int n,
+			Map<Integer, UCBValue> idValue, int articleId) throws SQLException {
+		if (linkSelectResult.next()) {
+			scannedLinksNumber++;
+			int linkId = linkSelectResult.getInt(1);
+			String joinSql = "select article_id, link_id from tbl_article_wiki13 a, tbl_article_link_09 al, "
+					+ "tbl_link_09 l where a.id = al.article_id and al.link_id = l.id and a.id = " + articleId
+					+ " and l.id = " + linkId + ";";
+			ResultSet joinResult = joinStatement.executeQuery(joinSql);
+			// TODO should we drop the indexes on tables?
+			int joinResultSize = joinResult.getFetchSize();
+			updateUCBValues(idValue, linkId, +1, n);
+			if (joinResultSize > 0) {
+				return new JoinResult(articleId, linkId);
+			}
+		} else {
+			System.err.println("Link table reached its end!");
+			System.out.println("link scans: " + linkTableScansNumber);
+			linkTableScansNumber++;
+			if (linkTableScansNumber >= LINK_SCAN_THRESHOLD) {
+				return null;
+			}
+			// linkSelectResult.first(); // this may skip the very first tuple
+		}
+		return null;
 	}
 
 	static void updateUCBValues(Map<Integer, UCBValue> idValue, int selectedId, int reward, int n) {

@@ -22,13 +22,14 @@ public class UBC {
 
 	static int totalArmPulls = 0;
 
-	static int ARTICLE_NUMBERS = 2666491;
+	static int TBL_ARTICLE_SIZE = 2666491;
+	static int TBL_ARTICLE_LINK_SIZE = 120916125;
 
 	public static void main(String[] args) {
 		try (Connection conn = DatabaseManager.createConnection()) {
 			try (Statement linkSelect = conn.createStatement()) {
 				String linkSelectSql = "select article_id from tbl_article_link_09";
-				ArmInfo[] arms = new ArmInfo[ARTICLE_NUMBERS];
+				ArmInfo[] arms = new ArmInfo[TBL_ARTICLE_SIZE];
 				for (int i = 0; i < arms.length; i++) {
 					arms[i] = new ArmInfo();
 				}
@@ -37,7 +38,7 @@ public class UBC {
 				System.out.println("init completed");
 				List<Integer> joinResults = new ArrayList<Integer>();
 				while (linkResultSet.next() && joinResults.size() < 10) {
-					if (totalArmPulls % 1000 == 0) {
+					if (totalArmPulls % 10000 == 0) {
 						System.out.println("processed " + totalArmPulls + " links");
 					}
 					totalArmPulls++;
@@ -73,7 +74,7 @@ public class UBC {
 	static int pickBestArmIndexGreedy(ArmInfo[] arms) {
 		double epsilon = 0.1;
 		if (new Random().nextDouble() < epsilon) {
-			return new Random().nextInt(ARTICLE_NUMBERS);
+			return new Random().nextInt(TBL_ARTICLE_SIZE);
 		} else {
 			int bestValue = -1;
 			int bestArm = -1;

@@ -45,7 +45,9 @@ public class UBC {
 					}
 					totalScannedArticleLinkTuples++;
 					int joiningArticleId = linkResultSet.getInt(1);
-					arms[joiningArticleId].reward++;
+					// arms[joiningArticleId].reward++;
+					// This can not be done because we do not the position (arm index) of the corresponding 
+					// joining article, we could do this if the arms were associated with the attribute values
 					int bestArmIndex = pickBestArmIndex(arms, totalScannedArticleLinkTuples);
 					arms[bestArmIndex].armPullCount++;
 					if (bestArmIndex == joiningArticleId) {

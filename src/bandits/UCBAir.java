@@ -10,7 +10,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
-public class UBCAir {
+public class UCBAir {
 
 	static int scannedLinksNumber = 0;
 	static int linkTableScansNumber = 0;

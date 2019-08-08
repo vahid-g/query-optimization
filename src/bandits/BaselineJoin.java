@@ -8,6 +8,9 @@ import java.sql.Statement;
 import java.util.HashSet;
 import java.util.Set;
 
+
+// reads R and S sequentially, stores seen tuples of R in an index and
+// for every new tuple s read from S, computes the join of s over the seen tuples of R and their index
 public class BaselineJoin {
 
 	static int scannedLinksNumber = 0;
@@ -53,7 +56,7 @@ public class BaselineJoin {
 				int scannedArticleNumber = 0;
 				Set<Integer> seenTuplesSet = new HashSet<Integer>();
 				Set<JoinResult> results = new HashSet<JoinResult>();
-				while (results.size() < 100) {
+				while (results.size() < 10) {
 					if (scannedLinksNumber % 1000 == 0) {
 						System.out.println("Scanned " + scannedLinksNumber + " links");
 					}

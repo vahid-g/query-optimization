@@ -11,7 +11,7 @@ import java.util.Set;
 
 // reads R and S sequentially, stores seen tuples of R in an index and
 // for every new tuple s read from S, computes the join of s over the seen tuples of R and their index
-public class BaselineJoin {
+public class BaselineHalfRippleJoin {
 
 	static int scannedLinksNumber = 0;
 	static int linkTableScansNumber = 0;

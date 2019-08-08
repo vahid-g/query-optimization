@@ -51,7 +51,7 @@ public class MAB {
 				// .executeQuery("SELECT article_id, link_id FROM sample_article_link_1p order
 				// by rand();");
 				ResultSet linkSelectResult = linkSelect
-						.executeQuery("SELECT article_id, link_id FROM tbl_article_link_09 order by rand();");
+						.executeQuery("SELECT article_id, link_id FROM tbl_article_link_09 order by rand(1);");
 				int currentSuccessCount = 0;
 				double m = Math.sqrt(ARTICLE_LINK_SIZE);
 				double readArticleLinks = 0;

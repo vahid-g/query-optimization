@@ -13,15 +13,21 @@ import java.util.Map;
 
 public class MAB {
 
+	static enum ExperimentMode {
+		M_RUN, M_LEARNING, NON_REC
+	}
+
 	static int SAMPLE_ARTICLE_LINK_SIZE = 1225105;
 	static int ARTICLE_LINK_SIZE = 120916125;
 
 	public static void main(String[] args) {
 		System.out.println("starting experiment " + new Date().toString());
 		if (args[0].equals("mrun")) {
-			mRun(false);
+			mRun(ExperimentMode.M_RUN);
 		} else if (args[0].equals("mlearning")) {
-			mRun(true);
+			mRun(ExperimentMode.M_LEARNING);
+		} else if (args[0].equals("nonrec")) {
+			mRun(ExperimentMode.NON_REC);
 		} else if (args[0].equals("nested")) {
 			nestedLoop();
 		} else {
@@ -30,7 +36,7 @@ public class MAB {
 		System.out.println("end of experiment " + new Date().toString());
 	}
 
-	public static void mRun(boolean mLearning) {
+	public static void mRun(ExperimentMode mode) {
 		List<String> results = new ArrayList<String>();
 		try (Connection connection1 = DatabaseManager.createConnection();
 				Connection connection2 = DatabaseManager.createConnection()) {
@@ -61,10 +67,12 @@ public class MAB {
 					} else if (results.size() >= 3) {
 						System.out.println("  found k results");
 						break;
-					} else if (mLearning && readArticleLinks >= m) {
+					} else if (mode == ExperimentMode.M_LEARNING && readArticleLinks >= m) {
 						System.out.println(" m-learning finished phase one");
 						break;
-					} else if (seenArmVals.size() >= m || currentSuccessCount > m) {
+					} else if (mode == ExperimentMode.NON_REC && currentSuccessCount > m) {
+						System.out.println(" non-recalling m-run finished phase one");
+					} else if (mode == ExperimentMode.M_RUN && (seenArmVals.size() >= m || currentSuccessCount > m)) {
 						System.out.println(" m-run finished phase one");
 						break;
 					}
@@ -115,12 +123,14 @@ public class MAB {
 					}
 					System.out.println("best arm: " + bestArm);
 					// join best arm
-					System.out.println("joining best arm");
-					while (linkSelectResult.next() && results.size() < 3) {
-						readArticleLinks++;
-						int linkArticleId = linkSelectResult.getInt(1);
-						if (linkArticleId == bestArm) {
-							results.add(linkArticleId + "-" + linkSelectResult.getInt(2));
+					if (bestArm != -1) {
+						System.out.println("joining best arm");
+						while (linkSelectResult.next() && results.size() < 3) {
+							readArticleLinks++;
+							int linkArticleId = linkSelectResult.getInt(1);
+							if (linkArticleId == bestArm) {
+								results.add(linkArticleId + "-" + linkSelectResult.getInt(2));
+							}
 						}
 					}
 				}

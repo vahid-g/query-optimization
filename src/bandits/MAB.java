@@ -11,9 +11,9 @@ import java.util.List;
 import java.util.Map;
 
 public class MAB {
-	
+
 	static int SAMPLE_ARTICLE_LINK_SIZE = 1225105;
-	
+
 	public static void main(String[] args) {
 		mLearn();
 	}
@@ -29,9 +29,9 @@ public class MAB {
 				ResultSet articleSelectResult = articleSelect.executeQuery("SELECT id FROM sample_article_1p;");
 				ResultSet linkSelectResult = linkSelect
 						.executeQuery("SELECT article_id, link_id FROM sample_article_link_1p;");
-				
 				double m = Math.sqrt(SAMPLE_ARTICLE_LINK_SIZE);
 				double readArticleLinks = 0;
+				double readArticles = 0;
 				int articleId = -1;
 				Map<Integer, Integer> seenArmVals = new HashMap<Integer, Integer>();
 				System.out.println("phase one");
@@ -52,6 +52,7 @@ public class MAB {
 						results.add(linkArticleId + ", " + linkSelectResult.getInt(2));
 					} else {
 						if (articleSelectResult.next()) {
+							readArticles++;
 							articleId = articleSelectResult.getInt(1);
 						} else {
 							System.out.println("reached end of articles :(");
@@ -61,6 +62,8 @@ public class MAB {
 						}
 					}
 				}
+				System.out.println("read links: " + readArticleLinks);
+				System.out.println("read articles: " + readArticles);
 				if (results.size() < 3) {
 					// find best arm
 					int bestArm = -1;

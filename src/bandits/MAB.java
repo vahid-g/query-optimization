@@ -24,6 +24,8 @@ public class MAB {
 			mRun(true);
 		} else if (args[0].equals("nested")) {
 			nestedLoop();
+		} else {
+			System.out.println("method not found");
 		}
 		System.out.println("end of experiment " + new Date().toString());
 	}

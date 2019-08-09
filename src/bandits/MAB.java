@@ -47,33 +47,36 @@ public class MAB {
 				// ResultSet articleSelectResult = articleSelect.executeQuery("SELECT id FROM
 				// sample_article_1p;");
 				ResultSet articleSelectResult = articleSelect.executeQuery("SELECT id FROM tbl_article_09;");
-				// ResultSet linkSelectResult = linkSelect
+				ResultSet linkSelectResult = linkSelect
+						.executeQuery("SELECT article_id, link_id FROM tbl_article_link_09 order by rand();");
 				// .executeQuery("SELECT article_id, link_id FROM sample_article_link_1p order
 				// by rand();");
-				ResultSet linkSelectResult = linkSelect
-						.executeQuery("SELECT article_id, link_id FROM tbl_article_link_09 order by rand(1);");
 				int currentSuccessCount = 0;
 				double m = Math.sqrt(ARTICLE_LINK_SIZE);
-				double readArticleLinks = 0;
-				double readArticles = 0;
+				int readArticleLinks = 0;
+				int readArticles = 0;
 				int articleTableScans = 1;
 				int articleId = 0;
 				Map<Integer, Integer> seenArmVals = new HashMap<Integer, Integer>();
 				System.out.println("phase one");
 				while (linkSelectResult.next()) {
 					if (articleTableScans >= 10) {
-						System.out.println("  max articleTableScans reached");
+						System.out.println("max articleTableScans reached");
 						break;
 					} else if (results.size() >= 3) {
-						System.out.println("  found k results");
+						System.out.println("found k results");
 						break;
 					} else if (mode == ExperimentMode.M_LEARNING && readArticleLinks >= m) {
-						System.out.println(" m-learning finished phase one");
+						System.out.println("m-learning finished phase one");
 						break;
 					} else if (mode == ExperimentMode.NON_REC && currentSuccessCount > m) {
-						System.out.println(" non-recalling m-run finished phase one");
+						System.out.println("non-recalling m-run finished phase ");
+						//TODO comlete nonrec part
 					} else if (mode == ExperimentMode.M_RUN && (seenArmVals.size() >= m || currentSuccessCount > m)) {
-						System.out.println(" m-run finished phase one");
+						System.out.println("m-run finished phase one with");
+						System.out.println("  m = " + m);
+						System.out.println("  tried arms = " + seenArmVals.size());
+						System.out.println("  current suuccess count = " + currentSuccessCount);
 						break;
 					}
 					readArticleLinks++;
@@ -106,7 +109,7 @@ public class MAB {
 						}
 					}
 				}
-				System.out.println("phase one done ===============");
+				System.out.println("===============");
 				System.out.println("read links: " + readArticleLinks);
 				System.out.println("read articles: " + readArticles);
 				System.out.println("article table scans: " + articleTableScans);

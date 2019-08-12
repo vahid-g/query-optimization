@@ -22,7 +22,7 @@ public class MAB {
 
 	public static void main(String[] args) {
 		System.out.println("starting experiment " + new Date().toString());
-		if (args[0].equals("mrun")) {
+		if (args.length == 0 || args[0].equals("mrun")) {
 			mRun(ExperimentMode.M_RUN);
 		} else if (args[0].equals("mlearning")) {
 			mRun(ExperimentMode.M_LEARNING);
@@ -71,7 +71,7 @@ public class MAB {
 						break;
 					} else if (mode == ExperimentMode.NON_REC && currentSuccessCount > m) {
 						System.out.println("non-recalling m-run finished phase ");
-						//TODO comlete nonrec part
+						// TODO comlete nonrec part
 					} else if (mode == ExperimentMode.M_RUN && (seenArmVals.size() >= m || currentSuccessCount > m)) {
 						System.out.println("m-run finished phase one with");
 						System.out.println("  m = " + m);

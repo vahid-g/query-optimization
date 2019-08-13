@@ -52,7 +52,15 @@ public class MAB {
 				// .executeQuery("SELECT article_id, link_id FROM sample_article_link_1p order
 				// by rand();");
 				int currentSuccessCount = 0;
-				double m = Math.sqrt(ARTICLE_LINK_SIZE);
+				// double b = 0.0000445;
+				double b = 1;
+				double n = ARTICLE_LINK_SIZE;
+				double m = 0;
+				if (mode == ExperimentMode.M_RUN || mode == ExperimentMode.NON_REC) {
+					m = Math.sqrt(n * b); // assuming a ~= 0
+				} else if (mode == ExperimentMode.M_LEARNING) {
+					m = Math.sqrt((n * b)) * Math.log(n * b);
+				}
 				int readArticleLinks = 0;
 				int readArticles = 0;
 				int articleTableScans = 1;
@@ -60,6 +68,7 @@ public class MAB {
 				Map<Integer, Integer> seenArmVals = new HashMap<Integer, Integer>();
 				System.out.println("phase one");
 				while (linkSelectResult.next()) {
+					readArticleLinks++;
 					if (articleTableScans >= 10) {
 						System.out.println("max articleTableScans reached");
 						break;
@@ -71,7 +80,7 @@ public class MAB {
 						break;
 					} else if (mode == ExperimentMode.NON_REC && currentSuccessCount > m) {
 						System.out.println("non-recalling m-run finished phase ");
-						// TODO comlete nonrec part
+						break;
 					} else if (mode == ExperimentMode.M_RUN && (seenArmVals.size() >= m || currentSuccessCount > m)) {
 						System.out.println("m-run finished phase one with");
 						System.out.println("  m = " + m);
@@ -79,14 +88,13 @@ public class MAB {
 						System.out.println("  current suuccess count = " + currentSuccessCount);
 						break;
 					}
-					readArticleLinks++;
 					int linkArticleId = linkSelectResult.getInt(1);
 					if (articleId == linkArticleId) {
 						System.out.println("success at article: " + articleId);
 						seenArmVals.put(articleId, seenArmVals.get(articleId) + 1);
 						results.add(linkArticleId + "-" + linkSelectResult.getInt(2));
 						currentSuccessCount++;
-					} else {
+					} else { // attempt reading a new articleId
 						if (articleSelectResult.next()) {
 							readArticles++;
 							articleId = articleSelectResult.getInt(1);
@@ -94,7 +102,7 @@ public class MAB {
 							if (!seenArmVals.containsKey(articleId)) {
 								seenArmVals.put(articleId, 0);
 							}
-						} else {
+						} else { // tbl_article_09 reached its end
 							System.out.println("reached end of articles!");
 							System.out.println("  read links: " + readArticleLinks);
 							System.out.println("  read articles: " + readArticles);

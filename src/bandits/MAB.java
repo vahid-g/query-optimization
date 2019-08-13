@@ -173,19 +173,16 @@ public class MAB {
 					}
 					readArticleLinks++;
 					int linkArticleId = linkSelectResult.getInt(1);
+					System.out.println("  joining link-article-id: " + linkArticleId);
 					try (Statement articleSelect = connection1.createStatement();) {
-						int readArticles = 0;
 						articleSelect.setFetchSize(Integer.MIN_VALUE);
 						// ResultSet articleSelectResult = articleSelect.executeQuery("SELECT id FROM
 						// sample_article_1p;");
 						ResultSet articleSelectResult = articleSelect.executeQuery("SELECT id FROM tbl_article_09;");
 						while (articleSelectResult.next() && results.size() < 3) {
-							if (readArticles % 10000 == 0) {
-								System.out.println("    read articles: " + readArticles);
-							}
-							readArticles++;
-							readArticles = articleSelectResult.getInt(1);
+							articleId = articleSelectResult.getInt(1);
 							if (articleId == linkArticleId) {
+								System.out.println("success");
 								results.add(linkArticleId + ", " + linkSelectResult.getInt(2));
 							}
 						}

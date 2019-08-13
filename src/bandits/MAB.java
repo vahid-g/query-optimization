@@ -48,7 +48,7 @@ public class MAB {
 				// sample_article_1p;");
 				ResultSet articleSelectResult = articleSelect.executeQuery("SELECT id FROM tbl_article_09;");
 				ResultSet linkSelectResult = linkSelect
-						.executeQuery("SELECT article_id, link_id FROM tbl_article_link_09 order by rand();");
+						.executeQuery("SELECT article_id, link_id FROM tbl_article_link_09 order by rand(1);");
 				// .executeQuery("SELECT article_id, link_id FROM sample_article_link_1p order
 				// by rand();");
 				int currentSuccessCount = 0;
@@ -164,7 +164,7 @@ public class MAB {
 				linkSelect.setFetchSize(Integer.MIN_VALUE);
 				ResultSet linkSelectResult = linkSelect
 						// .executeQuery("SELECT article_id, link_id FROM sample_article_link_1p;");
-						.executeQuery("SELECT article_id, link_id FROM tbl_article_link_09 order by rand();");
+						.executeQuery("SELECT article_id, link_id FROM tbl_article_link_09 order by rand(1);");
 				int readArticleLinks = 0;
 				int readArticles = 0;
 				int articleId = -1;
@@ -179,7 +179,7 @@ public class MAB {
 						// ResultSet articleSelectResult = articleSelect.executeQuery("SELECT id FROM
 						// sample_article_1p;");
 						ResultSet articleSelectResult = articleSelect.executeQuery("SELECT id FROM tbl_article_09;");
-						while (articleSelectResult.next()) {
+						while (articleSelectResult.next() && results.size() < 3) {
 							readArticles++;
 							if (articleId == linkArticleId) {
 								results.add(linkArticleId + ", " + linkSelectResult.getInt(2));

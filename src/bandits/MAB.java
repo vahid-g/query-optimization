@@ -167,7 +167,7 @@ public class MAB {
 						.executeQuery("SELECT article_id, link_id FROM tbl_article_link_09 order by rand(1);");
 				int readArticleLinks = 0;
 				int articleId = -1;
-				while (linkSelectResult.next() || results.size() < 3) {
+				while (linkSelectResult.next() && results.size() < 3) {
 					if (readArticleLinks % 10000 == 0) {
 						System.out.println("  read article-links: " + readArticleLinks);
 					}

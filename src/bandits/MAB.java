@@ -166,21 +166,25 @@ public class MAB {
 						// .executeQuery("SELECT article_id, link_id FROM sample_article_link_1p;");
 						.executeQuery("SELECT article_id, link_id FROM tbl_article_link_09 order by rand(1);");
 				int readArticleLinks = 0;
-				int readArticles = 0;
 				int articleId = -1;
 				while (linkSelectResult.next() || results.size() < 3) {
 					if (readArticleLinks % 10000 == 0) {
-						System.out.println("  read articles: " + readArticleLinks);
+						System.out.println("  read article-links: " + readArticleLinks);
 					}
 					readArticleLinks++;
 					int linkArticleId = linkSelectResult.getInt(1);
 					try (Statement articleSelect = connection1.createStatement();) {
+						int readArticles = 0;
 						articleSelect.setFetchSize(Integer.MIN_VALUE);
 						// ResultSet articleSelectResult = articleSelect.executeQuery("SELECT id FROM
 						// sample_article_1p;");
 						ResultSet articleSelectResult = articleSelect.executeQuery("SELECT id FROM tbl_article_09;");
 						while (articleSelectResult.next() && results.size() < 3) {
+							if (readArticles % 10000 == 0) {
+								System.out.println("    read articles: " + readArticles);
+							}
 							readArticles++;
+							readArticles = articleSelectResult.getInt(1);
 							if (articleId == linkArticleId) {
 								results.add(linkArticleId + ", " + linkSelectResult.getInt(2));
 							}
@@ -188,7 +192,6 @@ public class MAB {
 					}
 				}
 				System.out.println("read links: " + readArticleLinks);
-				System.out.println("read articles: " + readArticles);
 				System.out.println("results: " + results.size());
 			}
 		} catch (SQLException e) {

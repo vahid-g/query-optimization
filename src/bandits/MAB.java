@@ -164,11 +164,19 @@ public class MAB {
 				ResultSet articleSelectResult = articleSelect
 						.executeQuery("SELECT id FROM tbl_article_09 order by rand();");
 				ResultSet linkSelectResult = linkSelect
-						.executeQuery("SELECT article_id, link_id FROM tbl_article_link_09 order by rand();");
+						.executeQuery("SELECT article_id, link_id FROM tbl_article_link_09 order by rand(1);");
 				// .executeQuery("SELECT article_id, link_id FROM sample_article_link_1p order
 				// by rand();");
 				int currentSuccessCount = 0;
-				double m = Math.sqrt(ARTICLE_LINK_SIZE);
+				// double b = 0.0000445;
+				double b = 1;
+				double n = ARTICLE_LINK_SIZE;
+				double m = 0;
+				if (mode == ExperimentMode.M_RUN || mode == ExperimentMode.NON_REC) {
+					m = Math.sqrt(n * b); // assuming a ~= 0
+				} else if (mode == ExperimentMode.M_LEARNING) {
+					m = Math.sqrt((n * b)) * Math.log(n * b);
+				}
 				int readArticleLinks = 0;
 				int readArticles = 0;
 				int articleTableScans = 1;
@@ -176,6 +184,7 @@ public class MAB {
 				Map<Integer, Integer> seenArmVals = new HashMap<Integer, Integer>();
 				System.out.println("phase one");
 				while (linkSelectResult.next()) {
+					readArticleLinks++;
 					if (articleTableScans >= 10) {
 						System.out.println("max articleTableScans reached");
 						break;
@@ -195,14 +204,13 @@ public class MAB {
 						System.out.println("  current suuccess count = " + currentSuccessCount);
 						break;
 					}
-					readArticleLinks++;
 					int linkArticleId = linkSelectResult.getInt(1);
 					if (articleId == linkArticleId) {
 						System.out.println("success at article: " + articleId);
 						seenArmVals.put(articleId, seenArmVals.get(articleId) + 1);
 						results.add(linkArticleId + "-" + linkSelectResult.getInt(2));
 						currentSuccessCount++;
-					} else {
+					} else { // attempt reading a new articleId
 						if (articleSelectResult.next()) {
 							readArticles++;
 							articleId = articleSelectResult.getInt(1);
@@ -210,7 +218,7 @@ public class MAB {
 							if (!seenArmVals.containsKey(articleId)) {
 								seenArmVals.put(articleId, 0);
 							}
-						} else {
+						} else { // tbl_article_09 reached its end
 							System.out.println("reached end of articles!");
 							System.out.println("  read links: " + readArticleLinks);
 							System.out.println("  read articles: " + readArticles);
@@ -272,31 +280,31 @@ public class MAB {
 				linkSelect.setFetchSize(Integer.MIN_VALUE);
 				ResultSet linkSelectResult = linkSelect
 						// .executeQuery("SELECT article_id, link_id FROM sample_article_link_1p;");
-						.executeQuery("SELECT article_id, link_id FROM tbl_article_link_09 order by rand();");
+						.executeQuery("SELECT article_id, link_id FROM tbl_article_link_09 order by rand(1);");
 				int readArticleLinks = 0;
-				int readArticles = 0;
 				int articleId = -1;
-				while (linkSelectResult.next() || results.size() < 3) {
+				while (linkSelectResult.next() && results.size() < 3) {
 					if (readArticleLinks % 10000 == 0) {
-						System.out.println("  read articles: " + readArticleLinks);
+						System.out.println("  read article-links: " + readArticleLinks);
 					}
 					readArticleLinks++;
 					int linkArticleId = linkSelectResult.getInt(1);
+					System.out.println("  joining link-article-id: " + linkArticleId);
 					try (Statement articleSelect = connection1.createStatement();) {
 						articleSelect.setFetchSize(Integer.MIN_VALUE);
 						// ResultSet articleSelectResult = articleSelect.executeQuery("SELECT id FROM
 						// sample_article_1p;");
 						ResultSet articleSelectResult = articleSelect.executeQuery("SELECT id FROM tbl_article_09;");
-						while (articleSelectResult.next()) {
-							readArticles++;
+						while (articleSelectResult.next() && results.size() < 3) {
+							articleId = articleSelectResult.getInt(1);
 							if (articleId == linkArticleId) {
+								System.out.println("success");
 								results.add(linkArticleId + ", " + linkSelectResult.getInt(2));
 							}
 						}
 					}
 				}
 				System.out.println("read links: " + readArticleLinks);
-				System.out.println("read articles: " + readArticles);
 				System.out.println("results: " + results.size());
 			}
 		} catch (SQLException e) {

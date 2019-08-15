@@ -8,26 +8,31 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
+// many armed bandit strategies
 public class MAB {
 
 	static enum ExperimentMode {
 		M_RUN, M_LEARNING, NON_REC
 	}
 
-	static int SAMPLE_ARTICLE_LINK_SIZE = 1225105;
-	static int ARTICLE_LINK_SIZE = 120916125;
+	static final int SAMPLE_ARTICLE_LINK_SIZE = 1225105;
+	static final int ARTICLE_LINK_SIZE = 120916125;
+	static final int PAGE_SIZE = 1024;
 
 	public static void main(String[] args) {
 		System.out.println("starting experiment " + new Date().toString());
 		if (args.length == 0 || args[0].equals("mrun")) {
-			mRun(ExperimentMode.M_RUN);
+			// mabJoin(ExperimentMode.M_RUN);
+			mRunPaged();
 		} else if (args[0].equals("mlearning")) {
-			mRun(ExperimentMode.M_LEARNING);
+			mabJoin(ExperimentMode.M_LEARNING);
 		} else if (args[0].equals("nonrec")) {
-			mRun(ExperimentMode.NON_REC);
+			mabJoin(ExperimentMode.NON_REC);
 		} else if (args[0].equals("nested")) {
 			nestedLoop();
 		} else {
@@ -36,7 +41,109 @@ public class MAB {
 		System.out.println("end of experiment " + new Date().toString());
 	}
 
-	public static void mRun(ExperimentMode mode) {
+	// m-run strategy with pages as arms
+	public static void mRunPaged() {
+		List<String> results = new ArrayList<String>();
+		try (Connection connection1 = DatabaseManager.createConnection();
+				Connection connection2 = DatabaseManager.createConnection()) {
+			try (Statement articleSelect = connection1.createStatement();
+					Statement linkSelect = connection2.createStatement()) {
+				articleSelect.setFetchSize(Integer.MIN_VALUE);
+				linkSelect.setFetchSize(Integer.MIN_VALUE);
+				ResultSet articleSelectResult = articleSelect.executeQuery("SELECT id FROM tbl_article_09;"); // TODO
+																												// randomize
+				ResultSet linkSelectResult = linkSelect
+						.executeQuery("SELECT article_id, link_id FROM tbl_article_link_09 order by rand();");
+				int currentSuccessCount = 0;
+				double m = Math.sqrt(ARTICLE_LINK_SIZE / PAGE_SIZE);
+				int readArticleLinks = 0;
+				int readArticles = 0;
+				int pageId = 0;
+				Set<Integer> articleSet = new HashSet<Integer>();
+				Map<Integer, Integer> seenArmVals = new HashMap<Integer, Integer>();
+				Map<Integer, Set<Integer>> pageIdArticleSet = new HashMap<Integer, Set<Integer>>();
+				System.out.println("phase one");
+				while (linkSelectResult.next()) {
+					readArticleLinks++;
+					if (results.size() >= 3) {
+						System.out.println("found k results");
+						break;
+					} else if (seenArmVals.size() >= m || currentSuccessCount > m) {
+						System.out.println("m-run finished phase one with");
+						System.out.println("  m = " + m);
+						System.out.println("  tried arms = " + seenArmVals.size());
+						System.out.println("  current suuccess count = " + currentSuccessCount);
+						break;
+					}
+					int linkArticleId = linkSelectResult.getInt(1);
+					if (articleSet.contains(linkArticleId)) {
+						System.out.println("success at page: " + pageId);
+						seenArmVals.put(pageId, seenArmVals.get(pageId) + 1);
+						results.add(linkArticleId + "-" + linkSelectResult.getInt(2));
+						currentSuccessCount++;
+					} else {
+						pageId++;
+						articleSet = new HashSet<Integer>();
+						pageIdArticleSet.put(pageId, articleSet);
+						seenArmVals.put(pageId, 0);
+						currentSuccessCount = 0;
+						while (articleSet.size() < PAGE_SIZE) {
+							if (articleSelectResult.next()) {
+								readArticles++;
+								int articleId = articleSelectResult.getInt(1);
+								articleSet.add(articleId);
+							} else {
+								System.out.println("reached end of articles!");
+								System.out.println("  read links: " + readArticleLinks);
+								System.out.println("  read link pages: " + readArticleLinks / PAGE_SIZE);
+								articleSelectResult.close();
+								break;
+							}
+						}
+					}
+				}
+				System.out.println("===============");
+				System.out.println("read links: " + readArticleLinks);
+				System.out.println("read articles: " + readArticles);
+				System.out.println("number of pages: " + pageId);
+				if (results.size() < 3) {
+					// find best arm
+					int bestArm = -1;
+					int bestVal = 0;
+					System.out.println("finding best arm");
+					for (Integer key : seenArmVals.keySet()) {
+						if (seenArmVals.get(key) > bestVal) {
+							bestArm = key;
+							bestVal = seenArmVals.get(key);
+						}
+					}
+					System.out.println("best arm: " + bestArm);
+					// join best arm
+					if (bestArm != -1) {
+						System.out.println("joining best arm");
+						Set<Integer> bestPage = pageIdArticleSet.get(bestArm);
+						while (linkSelectResult.next() && results.size() < 3) {
+							readArticleLinks++;
+							int linkArticleId = linkSelectResult.getInt(1);
+							if (bestPage.contains(linkArticleId)) {
+								results.add(linkArticleId + "-" + linkSelectResult.getInt(2));
+							}
+						}
+					}
+				}
+				System.out.println("read links: " + readArticleLinks);
+				System.out.println("results size: " + results.size());
+				System.out.println(results);
+			}
+		} catch (SQLException e) {
+			e.printStackTrace();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+
+	// different MAB strategies with tuples as arms
+	public static void mabJoin(ExperimentMode mode) {
 		List<String> results = new ArrayList<String>();
 		try (Connection connection1 = DatabaseManager.createConnection();
 				Connection connection2 = DatabaseManager.createConnection()) {
@@ -46,7 +153,8 @@ public class MAB {
 				linkSelect.setFetchSize(Integer.MIN_VALUE);
 				// ResultSet articleSelectResult = articleSelect.executeQuery("SELECT id FROM
 				// sample_article_1p;");
-				ResultSet articleSelectResult = articleSelect.executeQuery("SELECT id FROM tbl_article_09;");
+				ResultSet articleSelectResult = articleSelect
+						.executeQuery("SELECT id FROM tbl_article_09 order by rand();");
 				ResultSet linkSelectResult = linkSelect
 						.executeQuery("SELECT article_id, link_id FROM tbl_article_link_09 order by rand();");
 				// .executeQuery("SELECT article_id, link_id FROM sample_article_link_1p order
@@ -71,7 +179,7 @@ public class MAB {
 						break;
 					} else if (mode == ExperimentMode.NON_REC && currentSuccessCount > m) {
 						System.out.println("non-recalling m-run finished phase ");
-						// TODO comlete nonrec part
+						break;
 					} else if (mode == ExperimentMode.M_RUN && (seenArmVals.size() >= m || currentSuccessCount > m)) {
 						System.out.println("m-run finished phase one with");
 						System.out.println("  m = " + m);

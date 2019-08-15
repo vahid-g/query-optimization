@@ -1,6 +1,8 @@
 package bandits;
 
+import java.io.FileWriter;
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -24,10 +26,18 @@ public class MAB {
 	static final int ARTICLE_LINK_SIZE = 120916125;
 	static final int PAGE_SIZE = 1024;
 
-	public static void main(String[] args) {
-		System.out.println("starting experiment " + new Date().toString());
-
-		System.out.println("end of experiment " + new Date().toString());
+	public static void main(String[] args) throws IOException {
+		List<String> results = new ArrayList<String>();
+		for (int i = 0; i < 10; i++) {
+			System.out.println("starting experiment #" + i + " at: " + new Date().toString());
+			results.add(mRunPaged());
+			System.out.println("end of experiment " + new Date().toString());
+		}
+		try (PrintWriter pw = new PrintWriter(new FileWriter("join.csv"))) {
+			for (String s : results) {
+				pw.println(s);
+			}
+		}
 	}
 
 	// m-run strategy with pages as arms
@@ -39,8 +49,7 @@ public class MAB {
 					Statement linkSelect = connection2.createStatement()) {
 				articleSelect.setFetchSize(Integer.MIN_VALUE);
 				linkSelect.setFetchSize(Integer.MIN_VALUE);
-				ResultSet articleSelectResult = articleSelect.executeQuery("SELECT id FROM tbl_article_09;"); // TODO
-																												// randomize
+				ResultSet articleSelectResult = articleSelect.executeQuery("SELECT id FROM tbl_article_09;"); 
 				ResultSet linkSelectResult = linkSelect
 						.executeQuery("SELECT article_id, link_id FROM tbl_article_link_09 order by rand();");
 				int currentSuccessCount = 0;
@@ -48,48 +57,56 @@ public class MAB {
 				int readArticleLinks = 0;
 				int readArticles = 0;
 				int pageId = 0;
-				Set<Integer> articleSet = new HashSet<Integer>();
+				int articleLinkCounter = 0;
+				Set<Integer> articleSet = null;
 				Map<Integer, Integer> seenArmVals = new HashMap<Integer, Integer>();
 				Map<Integer, Set<Integer>> pageIdArticleSet = new HashMap<Integer, Set<Integer>>();
 				System.out.println("phase one");
 				long start = System.currentTimeMillis();
-				while (linkSelectResult.next()) {
-					readArticleLinks++;
+				while (true) {
 					if (results.size() >= 3) {
 						System.out.println("found k results");
 						break;
 					} else if (seenArmVals.size() >= m || currentSuccessCount > m) {
 						System.out.println("m-run finished phase one with");
-						System.out.println("  m = " + m);
-						System.out.println("  tried arms = " + seenArmVals.size());
-						System.out.println("  current suuccess count = " + currentSuccessCount);
+						System.out.println("m = " + m);
+						System.out.println("tried arms = " + seenArmVals.size());
+						System.out.println("current suuccess count = " + currentSuccessCount);
 						break;
 					}
-					int linkArticleId = linkSelectResult.getInt(1);
-					System.out.println(articleSet.size());
-					if (articleSet.contains(linkArticleId)) {
-						System.out.println("success at page: " + pageId);
-						seenArmVals.put(pageId, seenArmVals.get(pageId) + 1);
-						results.add(linkArticleId + "-" + linkSelectResult.getInt(2));
-						currentSuccessCount++;
-					} else {
+					if (articleLinkCounter >= PAGE_SIZE || articleSet == null) {
+						if (currentSuccessCount > 0) {
+							seenArmVals.put(pageId, seenArmVals.get(pageId) + currentSuccessCount);
+						}
+						currentSuccessCount = 0;
+						articleLinkCounter = 0;
 						pageId++;
 						articleSet = new HashSet<Integer>();
 						pageIdArticleSet.put(pageId, articleSet);
 						seenArmVals.put(pageId, 0);
-						currentSuccessCount = 0;
 						while (articleSet.size() < PAGE_SIZE) {
 							if (articleSelectResult.next()) {
 								readArticles++;
-								int articleId = articleSelectResult.getInt(1);
-								articleSet.add(articleId);
+								articleSet.add(articleSelectResult.getInt(1));
 							} else {
-								System.out.println("reached end of articles!");
-								System.out.println("  read links: " + readArticleLinks);
-								System.out.println("  read link pages: " + readArticleLinks / PAGE_SIZE);
+								System.out.println("  reached end of articles!");
 								articleSelectResult.close();
 								break;
 							}
+						}
+					} else {
+						if (linkSelectResult.next()) {
+							readArticleLinks++;
+							articleLinkCounter++;
+							int linkArticleId = linkSelectResult.getInt(1);
+							if (articleSet.contains(linkArticleId)) {
+								results.add(linkArticleId + "-" + linkSelectResult.getInt(2));
+								currentSuccessCount++;
+							}
+						} else {
+							System.out.println("  reached end of article-links");
+							linkSelectResult.close();
+							break;
 						}
 					}
 				}
@@ -122,11 +139,12 @@ public class MAB {
 						}
 					}
 				}
+				long runtime = System.currentTimeMillis() - start;
 				System.out.println("read links: " + readArticleLinks);
 				System.out.println("results size: " + results.size());
 				System.out.println(results);
-				System.out.println("time(s) = " + (System.currentTimeMillis() - start) / 1000);
-				//TODO
+				System.out.println("time(s) = " + runtime / 1000);
+				return readArticleLinks + "," + readArticles + "," + runtime + "," + results.size();
 			}
 		} catch (SQLException e) {
 			e.printStackTrace();

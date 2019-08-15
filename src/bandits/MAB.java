@@ -26,23 +26,12 @@ public class MAB {
 
 	public static void main(String[] args) {
 		System.out.println("starting experiment " + new Date().toString());
-		if (args.length == 0 || args[0].equals("mrun")) {
-			// mabJoin(ExperimentMode.M_RUN);
-			mRunPaged();
-		} else if (args[0].equals("mlearning")) {
-			mabJoin(ExperimentMode.M_LEARNING);
-		} else if (args[0].equals("nonrec")) {
-			mabJoin(ExperimentMode.NON_REC);
-		} else if (args[0].equals("nested")) {
-			nestedLoop();
-		} else {
-			System.out.println("method not found");
-		}
+
 		System.out.println("end of experiment " + new Date().toString());
 	}
 
 	// m-run strategy with pages as arms
-	public static void mRunPaged() {
+	public static String mRunPaged() {
 		List<String> results = new ArrayList<String>();
 		try (Connection connection1 = DatabaseManager.createConnection();
 				Connection connection2 = DatabaseManager.createConnection()) {
@@ -63,6 +52,7 @@ public class MAB {
 				Map<Integer, Integer> seenArmVals = new HashMap<Integer, Integer>();
 				Map<Integer, Set<Integer>> pageIdArticleSet = new HashMap<Integer, Set<Integer>>();
 				System.out.println("phase one");
+				long start = System.currentTimeMillis();
 				while (linkSelectResult.next()) {
 					readArticleLinks++;
 					if (results.size() >= 3) {
@@ -76,6 +66,7 @@ public class MAB {
 						break;
 					}
 					int linkArticleId = linkSelectResult.getInt(1);
+					System.out.println(articleSet.size());
 					if (articleSet.contains(linkArticleId)) {
 						System.out.println("success at page: " + pageId);
 						seenArmVals.put(pageId, seenArmVals.get(pageId) + 1);
@@ -134,11 +125,28 @@ public class MAB {
 				System.out.println("read links: " + readArticleLinks);
 				System.out.println("results size: " + results.size());
 				System.out.println(results);
+				System.out.println("time(s) = " + (System.currentTimeMillis() - start) / 1000);
+				//TODO
 			}
 		} catch (SQLException e) {
 			e.printStackTrace();
 		} catch (IOException e) {
 			e.printStackTrace();
+		}
+		return "";
+	}
+
+	public static void mabJoinExperiment(String[] args) {
+		if (args.length == 0 || args[0].equals("mrun")) {
+			mabJoin(ExperimentMode.M_RUN);
+		} else if (args[0].equals("mlearning")) {
+			mabJoin(ExperimentMode.M_LEARNING);
+		} else if (args[0].equals("nonrec")) {
+			mabJoin(ExperimentMode.NON_REC);
+		} else if (args[0].equals("nested")) {
+			nestedLoop();
+		} else {
+			System.out.println("method not found");
 		}
 	}
 

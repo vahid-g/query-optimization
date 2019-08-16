@@ -73,7 +73,7 @@ public class MAB {
 						.executeQuery("SELECT article_id, link_id FROM tbl_article_link_09 order by rand();");
 
 				double m = Math.sqrt(ARTICLE_LINK_SIZE / PAGE_SIZE);
-				PriorityQueue<RelationPage> activePageHeap = new PriorityQueue<RelationPage>(
+				PriorityQueue<RelationPage> activePageHeap = new PriorityQueue<RelationPage>(PAGE_SIZE,
 						new Comparator<RelationPage>() {
 							@Override
 							public int compare(RelationPage o1, RelationPage o2) {
@@ -90,79 +90,45 @@ public class MAB {
 				List<Integer> articleLinkBufferList = new ArrayList<Integer>();
 				List<Integer> articleLinkLinkBufferList = new ArrayList<Integer>();
 				int articleLinkBufferCounter = 0;
+				boolean successfulPrevJoin = false;
 				while (activePageHeap.size() < m || currentSuccessCount < m) {
 					if (results.size() >= RESULT_SIZE_K) {
 						System.out.println("found k results in first m run");
 						break;
 					}
 					// read article-link page
-					while (articleLinkBufferCounter++ < PAGE_SIZE || linkSelectResult.next()) {
+					articleLinkCounter = 0;
+					while (articleLinkBufferCounter++ < PAGE_SIZE && linkSelectResult.next()) {
 						readArticleLinks++;
 						articleLinkCounter++;
 						articleLinkBufferList.add(linkSelectResult.getInt(1));
 						articleLinkLinkBufferList.add(linkSelectResult.getInt(2));
 					}
-					if (currentSuccessCount > 0) {
-						// attempt join
-						for (int i = 0; i < articleLinkBufferList.size(); i++) {
-							int articleLinkId = articleLinkBufferList.get(i);
-							if (currentPage.idSet.contains(articleLinkId)) {
-								results.add(articleLinkId + "-" + articleLinkLinkBufferList.get(i));
-								currentSuccessCount++;
-							}
-						}
-						currentPage.value = currentSuccessCount;
-						activePageHeap.add(currentPage);
-					} else { // read new article page
-						currentSuccessCount = 0;
-						articleLinkCounter = 0;
-						readArticlePages++;
-						while (currentPage.idSet.size() < PAGE_SIZE) {
-							while (currentPage.idSet.size() < PAGE_SIZE) {
-								if (articleSelectResult.next()) {
-									readArticles++;
-									currentPage.idSet.add(articleSelectResult.getInt(1));
-								} else {
-									System.out.println("  reached end of articles!");
-									articleSelectResult.close();
-									break;
-								}
-							}
-						}
-					}
-					if (currentPage == null || articleLinkCounter >= PAGE_SIZE) {
+					// read new article page
+					if (!successfulPrevJoin) {
 						if (currentPage != null) {
 							currentPage.value = currentSuccessCount;
 							activePageHeap.add(currentPage);
 						}
+						currentPage = new RelationPage();
 						currentSuccessCount = 0;
-						articleLinkCounter = 0;
 						readArticlePages++;
-						while (currentPage.idSet.size() < PAGE_SIZE) {
-							if (articleSelectResult.next()) {
-								readArticles++;
-								currentPage.idSet.add(articleSelectResult.getInt(1));
-							} else {
-								System.out.println("  reached end of articles!");
-								articleSelectResult.close();
-								break;
-							}
-						}
-					} else {
-						if (linkSelectResult.next()) {
-							readArticleLinks++;
-							articleLinkCounter++;
-							int linkArticleId = linkSelectResult.getInt(1);
-							if (currentPage.idSet.contains(linkArticleId)) {
-								results.add(linkArticleId + "-" + linkSelectResult.getInt(2));
-								currentSuccessCount++;
-							}
-						} else {
-							System.out.println("  reached end of article-links");
-							linkSelectResult.close();
-							break;
+						while (currentPage.idSet.size() < PAGE_SIZE && articleSelectResult.next()) {
+							readArticles++;
+							currentPage.idSet.add(articleSelectResult.getInt(1));
 						}
 					}
+					// attempt join
+					successfulPrevJoin = false;
+					for (int i = 0; i < articleLinkBufferList.size(); i++) {
+						int articleLinkId = articleLinkBufferList.get(i);
+						if (currentPage.idSet.contains(articleLinkId)) {
+							results.add(articleLinkId + "-" + articleLinkLinkBufferList.get(i));
+							currentSuccessCount++;
+							successfulPrevJoin = true;
+						}
+					}
+
 				}
 				while (results.size() < RESULT_SIZE_K) {
 					// find best arm

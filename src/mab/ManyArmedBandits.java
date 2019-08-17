@@ -33,7 +33,7 @@ public class ManyArmedBandits {
 	public static void main(String[] args) throws IOException {
 		if (args[0].equals("mrun")) {
 			new ManyArmedBandits().runMRunPaged();
-		} else if (args[1].equals("nested")) {
+		} else if (args[0].equals("nested")) {
 			new ManyArmedBandits().runNestedLoop();
 		} else {
 			System.out.println("command not found");

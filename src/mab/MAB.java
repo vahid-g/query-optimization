@@ -22,38 +22,15 @@ import database.DatabaseManager;
 // many armed bandit strategies
 public class MAB {
 
-	static class RelationPage {
-		Set<Integer> idSet;
-		Integer value = 0;
-
-		public RelationPage(int value, Set<Integer> idSet) {
-			this.value = value;
-			this.idSet = idSet;
-		}
-
-		public RelationPage() {
-			idSet = new HashSet<Integer>();
-		}
-	}
-
-	static class ArticleLinkDAO {
-		int articleId = 0;
-		int linkId = 0;
-
-		public ArticleLinkDAO(int articleId, int linkId) {
-			this.articleId = articleId;
-			this.linkId = linkId;
-		}
-	}
-
-	static enum ExperimentMode {
-		M_RUN, M_LEARNING, NON_REC
-	}
-
 	static final int SAMPLE_ARTICLE_LINK_SIZE = 1225105;
 	static final int ARTICLE_LINK_SIZE = 120916125;
 	static final int PAGE_SIZE = 1024;
 	static final int RESULT_SIZE_K = 3;
+
+	private int readArticleLinks = 0;
+	private int readArticles = 0;
+	private int readArticlePages = 0;
+	private int readArticleLinkPages = 0;
 
 	public static void main(String[] args) throws IOException {
 		List<String> results = new ArrayList<String>();
@@ -70,11 +47,6 @@ public class MAB {
 		}
 	}
 
-	int readArticleLinks = 0;
-	int readArticles = 0;
-	int readArticlePages = 0;
-	int readArticleLinkPages = 0;
-
 	// m-run strategy with pages as arms
 	public String mRunPaged() {
 		List<String> results = new ArrayList<String>();
@@ -82,7 +54,7 @@ public class MAB {
 		try (Connection connection1 = DatabaseManager.createConnection();
 				Connection connection2 = DatabaseManager.createConnection()) {
 			try (Statement articleSelect = connection1.createStatement();
-					Statement linkSelect = connection2.createStatement(ResultSet.TYPE_SCROLL_SENSITIVE,
+					Statement linkSelect = connection2.createStatement(ResultSet.TYPE_SCROLL_INSENSITIVE,
 							ResultSet.CONCUR_READ_ONLY)) {
 				// articleSelect.setFetchSize(Integer.MIN_VALUE);
 				System.out.println("Default fetch size for articles: " + articleSelect.getFetchSize());
@@ -181,9 +153,9 @@ public class MAB {
 					activePageHeap.add(currentPage);
 				}
 				runtime = System.currentTimeMillis() - start;
+				System.out.println("read articles: " + readArticles);
 				System.out.println("read article pages: " + readArticlePages);
 				System.out.println("results size: " + results.size());
-				// System.out.println(results);
 				System.out.println("time(ms) = " + runtime);
 				linkSelectResult.close();
 			}
@@ -219,7 +191,7 @@ public class MAB {
 		return currentPage;
 	}
 
-	public static void mabJoinExperiment(String[] args) {
+	public void mabJoinExperiment(String[] args) {
 		if (args.length == 0 || args[0].equals("mrun")) {
 			mabJoin(ExperimentMode.M_RUN);
 		} else if (args[0].equals("mlearning")) {
@@ -227,14 +199,14 @@ public class MAB {
 		} else if (args[0].equals("nonrec")) {
 			mabJoin(ExperimentMode.NON_REC);
 		} else if (args[0].equals("nested")) {
-			nestedLoop();
+			nestedLoopLinkAsOuter();
 		} else {
 			System.out.println("method not found");
 		}
 	}
 
 	// different MAB strategies with tuples as arms
-	public static void mabJoin(ExperimentMode mode) {
+	public void mabJoin(ExperimentMode mode) {
 		List<String> results = new ArrayList<String>();
 		try (Connection connection1 = DatabaseManager.createConnection();
 				Connection connection2 = DatabaseManager.createConnection()) {
@@ -355,7 +327,39 @@ public class MAB {
 		}
 	}
 
-	public static void nestedLoop() {
+	public void nestedLoop() {
+		List<String> results = new ArrayList<String>();
+		try (Connection connection1 = DatabaseManager.createConnection();
+				Connection connection2 = DatabaseManager.createConnection()) {
+			try (Statement articleSelect = connection1.createStatement();
+					Statement linkSelect = connection2.createStatement(ResultSet.TYPE_SCROLL_INSENSITIVE,
+							ResultSet.CONCUR_READ_ONLY)) {
+				System.out.println("Default fetch size for articles: " + articleSelect.getFetchSize());
+				linkSelect.setFetchSize(Integer.MIN_VALUE);
+				ResultSet articleSelectResult = articleSelect.executeQuery("SELECT id FROM tbl_article_09;");
+				ResultSet linkSelectResult = linkSelect
+						.executeQuery("SELECT article_id, link_id FROM tbl_article_link_09 order by rand();");
+				int articleId = -1;
+				while (articleSelectResult.next() && results.size() < 3) {
+					articleId = articleSelectResult.getInt(1);
+					while (linkSelectResult.next() && results.size() < 3) {
+						int linkArticleId = linkSelectResult.getInt(1);
+						if (articleId == linkArticleId) {
+							results.add(linkArticleId + ", " + linkSelectResult.getInt(2));
+						}
+					} // end inner loop of the join
+					linkSelectResult.first();
+				} // end outer loop of the join
+				linkSelectResult.close();
+			} // end try for statements
+		} catch (SQLException e) {
+			e.printStackTrace();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+
+	public void nestedLoopLinkAsOuter() {
 		List<String> results = new ArrayList<String>();
 		try (Connection connection1 = DatabaseManager.createConnection();
 				Connection connection2 = DatabaseManager.createConnection()) {
@@ -395,6 +399,34 @@ public class MAB {
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
+	}
+
+	static class RelationPage {
+		Set<Integer> idSet;
+		Integer value = 0;
+
+		public RelationPage(int value, Set<Integer> idSet) {
+			this.value = value;
+			this.idSet = idSet;
+		}
+
+		public RelationPage() {
+			idSet = new HashSet<Integer>();
+		}
+	}
+
+	static class ArticleLinkDAO {
+		int articleId = 0;
+		int linkId = 0;
+
+		public ArticleLinkDAO(int articleId, int linkId) {
+			this.articleId = articleId;
+			this.linkId = linkId;
+		}
+	}
+
+	static enum ExperimentMode {
+		M_RUN, M_LEARNING, NON_REC
 	}
 
 }

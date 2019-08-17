@@ -10,6 +10,8 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
+import database.DatabaseManager;
+
 // reads two tables R, S consisting of repeated article IDs with different orderings and joins them using a UBC approach
 // at each round, one tuple is read from S sequentially and the algorithm decides to read a new tuple 
 // from R or do explore exploitationg on the already seen tuples from R

@@ -10,6 +10,8 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
+import database.DatabaseManager;
+
 public class UCBAir {
 
 	static int scannedLinksNumber = 0;

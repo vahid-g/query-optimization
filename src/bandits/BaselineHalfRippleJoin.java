@@ -8,6 +8,8 @@ import java.sql.Statement;
 import java.util.HashSet;
 import java.util.Set;
 
+import database.DatabaseManager;
+
 
 // reads R and S sequentially, stores seen tuples of R in an index and
 // for every new tuple s read from S, computes the join of s over the seen tuples of R and their index

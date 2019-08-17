@@ -12,6 +12,8 @@ import java.util.List;
 import java.util.Random;
 import java.util.Scanner;
 
+import database.DatabaseManager;
+
 public class UCB {
 
 	static class ArmInfo {

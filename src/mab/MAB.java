@@ -1,4 +1,4 @@
-package bandits;
+package mab;
 
 import java.io.FileWriter;
 import java.io.IOException;
@@ -16,6 +16,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Set;
+
+import database.DatabaseManager;
 
 // many armed bandit strategies
 public class MAB {
@@ -55,13 +57,13 @@ public class MAB {
 
 	public static void main(String[] args) throws IOException {
 		List<String> results = new ArrayList<String>();
-		results.add("link_pages, article_pages, time, result_size");
-		for (int i = 0; i < 1; i++) {
+		for (int i = 0; i < 20; i++) {
 			System.out.println("starting experiment #" + i + " at: " + new Date().toString());
 			results.add(new MAB().mRunPaged());
 			System.out.println("end of experiment " + new Date().toString());
 		}
 		try (PrintWriter pw = new PrintWriter(new FileWriter("join.csv"))) {
+			pw.println("article-pages, link-pages, total-pages, time (ms), result-size");
 			for (String s : results) {
 				pw.println(s);
 			}
@@ -83,6 +85,7 @@ public class MAB {
 					Statement linkSelect = connection2.createStatement(ResultSet.TYPE_SCROLL_SENSITIVE,
 							ResultSet.CONCUR_READ_ONLY)) {
 				// articleSelect.setFetchSize(Integer.MIN_VALUE);
+				System.out.println("Default fetch size for articles: " + articleSelect.getFetchSize());
 				linkSelect.setFetchSize(Integer.MIN_VALUE);
 				ResultSet articleSelectResult = articleSelect.executeQuery("SELECT id FROM tbl_article_09;");
 				ResultSet linkSelectResult = linkSelect
@@ -180,11 +183,12 @@ public class MAB {
 				runtime = System.currentTimeMillis() - start;
 				System.out.println("read article pages: " + readArticlePages);
 				System.out.println("results size: " + results.size());
-				System.out.println(results);
+				// System.out.println(results);
 				System.out.println("time(ms) = " + runtime);
 				linkSelectResult.close();
-			}			
-			return readArticlePages + "," + readArticleLinkPages + "," + runtime + "," + results.size();
+			}
+			return readArticlePages + "," + readArticleLinkPages + "," + (readArticlePages + readArticleLinkPages) + ","
+					+ runtime + "," + results.size();
 		} catch (SQLException e) {
 			e.printStackTrace();
 		} catch (IOException e) {

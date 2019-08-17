@@ -34,6 +34,16 @@ public class MAB {
 		}
 	}
 
+	static class ArticleLinkDAO {
+		int articleId = 0;
+		int linkId = 0;
+
+		public ArticleLinkDAO(int articleId, int linkId) {
+			this.articleId = articleId;
+			this.linkId = linkId;
+		}
+	}
+
 	static enum ExperimentMode {
 		M_RUN, M_LEARNING, NON_REC
 	}
@@ -45,9 +55,10 @@ public class MAB {
 
 	public static void main(String[] args) throws IOException {
 		List<String> results = new ArrayList<String>();
-		for (int i = 0; i < 10; i++) {
+		results.add("link_pages, article_pages, time, result_size");
+		for (int i = 0; i < 1; i++) {
 			System.out.println("starting experiment #" + i + " at: " + new Date().toString());
-			results.add(mRunPaged());
+			results.add(new MAB().mRunPaged());
 			System.out.println("end of experiment " + new Date().toString());
 		}
 		try (PrintWriter pw = new PrintWriter(new FileWriter("join.csv"))) {
@@ -57,21 +68,25 @@ public class MAB {
 		}
 	}
 
+	int readArticleLinks = 0;
+	int readArticles = 0;
+	int readArticlePages = 0;
+	int readArticleLinkPages = 0;
+
 	// m-run strategy with pages as arms
-	public static String mRunPaged() {
+	public String mRunPaged() {
 		List<String> results = new ArrayList<String>();
-		int totalReadPages = 0;
+		long runtime = -1;
 		try (Connection connection1 = DatabaseManager.createConnection();
 				Connection connection2 = DatabaseManager.createConnection()) {
 			try (Statement articleSelect = connection1.createStatement();
 					Statement linkSelect = connection2.createStatement(ResultSet.TYPE_SCROLL_SENSITIVE,
 							ResultSet.CONCUR_READ_ONLY)) {
-				articleSelect.setFetchSize(Integer.MIN_VALUE);
+				// articleSelect.setFetchSize(Integer.MIN_VALUE);
 				linkSelect.setFetchSize(Integer.MIN_VALUE);
 				ResultSet articleSelectResult = articleSelect.executeQuery("SELECT id FROM tbl_article_09;");
 				ResultSet linkSelectResult = linkSelect
 						.executeQuery("SELECT article_id, link_id FROM tbl_article_link_09 order by rand();");
-
 				double m = Math.sqrt(ARTICLE_LINK_SIZE / PAGE_SIZE);
 				PriorityQueue<RelationPage> activePageHeap = new PriorityQueue<RelationPage>(PAGE_SIZE,
 						new Comparator<RelationPage>() {
@@ -82,117 +97,95 @@ public class MAB {
 						});
 				long start = System.currentTimeMillis();
 				int currentSuccessCount = 0;
-				int readArticleLinks = 0;
-				int readArticles = 0;
-				int readArticlePages = 0;
-				int articleLinkCounter = 0;
-				RelationPage currentPage = null;
-				List<Integer> articleLinkBufferList = new ArrayList<Integer>();
-				List<Integer> articleLinkLinkBufferList = new ArrayList<Integer>();
-				int articleLinkBufferCounter = 0;
 				boolean successfulPrevJoin = false;
-				while (activePageHeap.size() < m || currentSuccessCount < m) {
+				List<ArticleLinkDAO> articleLinkBufferList = null;
+				RelationPage currentPage = readNextArticlePage(articleSelectResult);
+				System.out.println("running first m runs");
+				while (activePageHeap.size() < m) {
 					if (results.size() >= RESULT_SIZE_K) {
-						System.out.println("found k results in first m run");
+						System.out.println("found " + RESULT_SIZE_K + " results in first m run");
+						break;
+					}
+					if (currentSuccessCount >= m) {
+						System.out.println("found m consecutive successes");
+						currentPage.value = currentSuccessCount;
+						activePageHeap.add(currentPage);
 						break;
 					}
 					// read article-link page
-					articleLinkCounter = 0;
-					while (articleLinkBufferCounter++ < PAGE_SIZE && linkSelectResult.next()) {
-						readArticleLinks++;
-						articleLinkCounter++;
-						articleLinkBufferList.add(linkSelectResult.getInt(1));
-						articleLinkLinkBufferList.add(linkSelectResult.getInt(2));
-					}
-					// read new article page
-					if (!successfulPrevJoin) {
-						if (currentPage != null) {
-							currentPage.value = currentSuccessCount;
-							activePageHeap.add(currentPage);
-						}
-						currentPage = new RelationPage();
-						currentSuccessCount = 0;
-						readArticlePages++;
-						while (currentPage.idSet.size() < PAGE_SIZE && articleSelectResult.next()) {
-							readArticles++;
-							currentPage.idSet.add(articleSelectResult.getInt(1));
-						}
-					}
+					articleLinkBufferList = readNextArticleLinkPage(linkSelectResult);
 					// attempt join
 					successfulPrevJoin = false;
 					for (int i = 0; i < articleLinkBufferList.size(); i++) {
-						int articleLinkId = articleLinkBufferList.get(i);
-						if (currentPage.idSet.contains(articleLinkId)) {
-							results.add(articleLinkId + "-" + articleLinkLinkBufferList.get(i));
+						int articleLinkId = articleLinkBufferList.get(i).articleId;
+						if (currentPage.idSet.contains(articleLinkBufferList.get(i).articleId)) {
+							results.add(articleLinkId + "-" + articleLinkBufferList.get(i).linkId);
 							currentSuccessCount++;
 							successfulPrevJoin = true;
 						}
 					}
-
+					// update values and read new article page
+					if (!successfulPrevJoin) {
+						currentPage.value = currentSuccessCount;
+						activePageHeap.add(currentPage);
+						currentSuccessCount = 0;
+						currentPage = readNextArticlePage(articleSelectResult);
+					}
 				}
+				System.out.println("running phase two");
 				while (results.size() < RESULT_SIZE_K) {
-					// find best arm
+					// find the best page
 					RelationPage bestPage = activePageHeap.poll();
-					System.out.println("value of best page: " + bestPage.value);
-
-					// join best arm
-					if (bestPage.value > 0) {
-						System.out.println("joining best arm");
-						Set<Integer> articleIds = bestPage.idSet;
-						while (linkSelectResult.next() && results.size() < 3) {
-							int linkArticleId = linkSelectResult.getInt(1);
-							if (articleIds.contains(linkArticleId)) {
-								results.add(linkArticleId + "-" + linkSelectResult.getInt(2));
-							}
+					System.out.println("  value of best page: " + bestPage.value);
+					// join the best page
+					// TODO note that best page may have a value of zero
+					if (bestPage.value == 0) {
+						System.out.println("  best page has zero value!!!");
+					}
+					Set<Integer> articleIds = bestPage.idSet;
+					int lastArticleLinkRow = readArticleLinks;
+					while (linkSelectResult.next() && results.size() < RESULT_SIZE_K) {
+						int linkArticleId = linkSelectResult.getInt(1);
+						if (articleIds.contains(linkArticleId)) {
+							results.add(linkArticleId + "-" + linkSelectResult.getInt(2));
 						}
-						if (results.size() > RESULT_SIZE_K) {
-							break;
-						}
+					}
+					linkSelectResult.absolute(lastArticleLinkRow);
+					if (results.size() > RESULT_SIZE_K) {
+						break;
 					}
 
 					// read new page
-					currentPage = new RelationPage();
-					readArticlePages++;
-					while (currentPage.idSet.size() < PAGE_SIZE) {
-						if (articleSelectResult.next()) {
-							readArticles++;
-							currentPage.idSet.add(articleSelectResult.getInt(1));
-						} else {
-							System.out.println("  reached end of articles!");
-							articleSelectResult.close();
-							break;
-						}
+					currentPage = readNextArticlePage(articleSelectResult);
+					if (currentPage.idSet.size() < PAGE_SIZE) {
+						System.out.println("  reached end of article!!!");
+						break;
+					}
+					articleLinkBufferList = readNextArticleLinkPage(linkSelectResult);
+					if (articleLinkBufferList.size() < PAGE_SIZE) {
+						System.out.println("  reached end of article-link!!!");
+						break;
 					}
 					// join new page with next article-link page
-					currentSuccessCount = 0;
-					articleLinkCounter = 0;
-					linkSelectResult.absolute(readArticleLinks);
-					while (articleLinkCounter < PAGE_SIZE) {
-						if (linkSelectResult.next()) {
-							readArticleLinks++;
-							articleLinkCounter++;
-							int linkArticleId = linkSelectResult.getInt(1);
-							if (currentPage.idSet.contains(linkArticleId)) {
-								results.add(linkArticleId + "-" + linkSelectResult.getInt(2));
-								currentSuccessCount++;
-							}
-						} else {
-							System.out.println("  reached end of article-links");
-							linkSelectResult.close();
-							break;
+					for (int i = 0; i < articleLinkBufferList.size(); i++) {
+						int articleLinkId = articleLinkBufferList.get(i).articleId;
+						if (currentPage.idSet.contains(articleLinkBufferList.get(i).articleId)) {
+							results.add(articleLinkId + "-" + articleLinkBufferList.get(i).linkId);
+							currentSuccessCount++;
 						}
 					}
+					currentPage.value = currentSuccessCount;
+					activePageHeap.add(currentPage);
 				}
-				long runtime = System.currentTimeMillis() - start;
+				runtime = System.currentTimeMillis() - start;
 				System.out.println("read article pages: " + readArticlePages);
 				System.out.println("results size: " + results.size());
 				System.out.println(results);
-				System.out.println("time(s) = " + runtime / 1000);
-				return readArticleLinks + "," + readArticles + "," + runtime + "," + results.size();
-			}
-		} catch (
-
-		SQLException e) {
+				System.out.println("time(ms) = " + runtime);
+				linkSelectResult.close();
+			}			
+			return readArticlePages + "," + readArticleLinkPages + "," + runtime + "," + results.size();
+		} catch (SQLException e) {
 			e.printStackTrace();
 		} catch (IOException e) {
 			e.printStackTrace();
@@ -200,8 +193,26 @@ public class MAB {
 		return "";
 	}
 
-	static void findNextBestPage() {
+	private List<ArticleLinkDAO> readNextArticleLinkPage(ResultSet linkSelectResult) throws SQLException {
+		List<ArticleLinkDAO> articleLinkBufferList = new ArrayList<ArticleLinkDAO>();
+		int articleLinkCounter = 0;
+		while (articleLinkCounter++ < PAGE_SIZE && linkSelectResult.next()) {
+			readArticleLinks++;
+			articleLinkCounter++;
+			articleLinkBufferList.add(new ArticleLinkDAO(linkSelectResult.getInt(1), linkSelectResult.getInt(2)));
+		}
+		readArticleLinkPages++;
+		return articleLinkBufferList;
+	}
 
+	private RelationPage readNextArticlePage(ResultSet articleSelectResult) throws SQLException {
+		RelationPage currentPage = new RelationPage();
+		while (currentPage.idSet.size() < PAGE_SIZE && articleSelectResult.next()) {
+			readArticles++;
+			currentPage.idSet.add(articleSelectResult.getInt(1));
+		}
+		readArticlePages++;
+		return currentPage;
 	}
 
 	public static void mabJoinExperiment(String[] args) {

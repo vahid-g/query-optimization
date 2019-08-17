@@ -31,10 +31,35 @@ public class ManyArmedBandits {
 	private int readArticleLinkPages = 0;
 
 	public static void main(String[] args) throws IOException {
+		if (args[0].equals("mrun")) {
+			new ManyArmedBandits().runMRunPaged();
+		} else if (args[1].equals("nested")) {
+			new ManyArmedBandits().runNestedLoop();
+		} else {
+			System.out.println("command not found");
+		}
+	}
+
+	public void runMRunPaged() throws IOException {
 		List<String> results = new ArrayList<String>();
 		for (int i = 0; i < 20; i++) {
 			System.out.println("starting experiment #" + i + " at: " + new Date().toString());
 			results.add(new ManyArmedBandits().mRunPaged());
+			System.out.println("end of experiment " + new Date().toString());
+		}
+		try (PrintWriter pw = new PrintWriter(new FileWriter("join.csv"))) {
+			pw.println("article-pages, link-pages, total-pages, time (ms), result-size");
+			for (String s : results) {
+				pw.println(s);
+			}
+		}
+	}
+
+	public void runNestedLoop() throws IOException {
+		List<String> results = new ArrayList<String>();
+		for (int i = 0; i < 20; i++) {
+			System.out.println("starting experiment #" + i + " at: " + new Date().toString());
+			results.add(new ManyArmedBandits().nestedLoop());
 			System.out.println("end of experiment " + new Date().toString());
 		}
 		try (PrintWriter pw = new PrintWriter(new FileWriter("join.csv"))) {
@@ -189,8 +214,9 @@ public class ManyArmedBandits {
 		return currentPage;
 	}
 
-	public void nestedLoop() {
+	private String nestedLoop() {
 		List<String> results = new ArrayList<String>();
+		long time = 0;
 		try (Connection connection1 = DatabaseManager.createConnection();
 				Connection connection2 = DatabaseManager.createConnection()) {
 			try (Statement articleSelect = connection1.createStatement();
@@ -202,9 +228,12 @@ public class ManyArmedBandits {
 				ResultSet linkSelectResult = linkSelect
 						.executeQuery("SELECT article_id, link_id FROM tbl_article_link_09 order by rand();");
 				int articleId = -1;
+				long start = System.currentTimeMillis();
 				while (articleSelectResult.next() && results.size() < 3) {
+					readArticles++;
 					articleId = articleSelectResult.getInt(1);
 					while (linkSelectResult.next() && results.size() < 3) {
+						readArticleLinks++;
 						int linkArticleId = linkSelectResult.getInt(1);
 						if (articleId == linkArticleId) {
 							results.add(linkArticleId + ", " + linkSelectResult.getInt(2));
@@ -212,6 +241,7 @@ public class ManyArmedBandits {
 					} // end inner loop of the join
 					linkSelectResult.first();
 				} // end outer loop of the join
+				time = System.currentTimeMillis() - start;
 				linkSelectResult.close();
 			} // end try for statements
 		} catch (SQLException e) {
@@ -219,6 +249,8 @@ public class ManyArmedBandits {
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
+		return (readArticles / PAGE_SIZE) + "," + (readArticleLinks / PAGE_SIZE) + ","
+				+ ((readArticles + readArticleLinks) / PAGE_SIZE) + "," + time + "," + results.size();
 	}
 
 	static class RelationPage {

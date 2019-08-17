@@ -249,8 +249,9 @@ public class ManyArmedBandits {
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
-		return (readArticles / PAGE_SIZE) + "," + (readArticleLinks / PAGE_SIZE) + ","
-				+ ((readArticles + readArticleLinks) / PAGE_SIZE) + "," + time + "," + results.size();
+		System.out.println("read articles: " + readArticles);
+		return (readArticles / PAGE_SIZE + 1) + "," + (readArticleLinks / PAGE_SIZE + 1) + ","
+				+ ((readArticles + readArticleLinks) / PAGE_SIZE + 1) + "," + time + "," + results.size();
 	}
 
 	static class RelationPage {

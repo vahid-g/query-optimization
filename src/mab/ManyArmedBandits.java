@@ -227,17 +227,18 @@ public class ManyArmedBandits {
 				ResultSet articleSelectResult = articleSelect.executeQuery("SELECT id FROM tbl_article_09;");
 				ResultSet linkSelectResult = linkSelect
 						.executeQuery("SELECT article_id, link_id FROM tbl_article_link_09 order by rand();");
-				int articleId = -1;
 				long start = System.currentTimeMillis();
-				while (articleSelectResult.next() && results.size() < 3) {
-					readArticles++;
-					articleId = articleSelectResult.getInt(1);
-					while (linkSelectResult.next() && results.size() < 3) {
-						readArticleLinks++;
-						int linkArticleId = linkSelectResult.getInt(1);
-						if (articleId == linkArticleId) {
-							results.add(linkArticleId + ", " + linkSelectResult.getInt(2));
+				while (results.size() < RESULT_SIZE_K) {
+					RelationPage articlePage = readNextArticlePage(articleSelectResult);
+					List<ArticleLinkDAO> articleLinkList = readNextArticleLinkPage(linkSelectResult);
+					while (articleLinkList.size() > 0 && results.size() < RESULT_SIZE_K) {
+						for (ArticleLinkDAO articleLink : articleLinkList) {
+							if (articlePage.idSet.contains(articleLink.articleId)) {
+								results.add(articleLink.articleId + ", " + articleLink.linkId);
+								// TODO should we break if K results are found?
+							}
 						}
+						articleLinkList = readNextArticleLinkPage(linkSelectResult);
 					} // end inner loop of the join
 					linkSelectResult.first();
 				} // end outer loop of the join
@@ -250,8 +251,8 @@ public class ManyArmedBandits {
 			e.printStackTrace();
 		}
 		System.out.println("read articles: " + readArticles);
-		return (readArticles / PAGE_SIZE + 1) + "," + (readArticleLinks / PAGE_SIZE + 1) + ","
-				+ ((readArticles + readArticleLinks) / PAGE_SIZE + 1) + "," + time + "," + results.size();
+		return readArticlePages + "," + readArticleLinkPages + "," + (readArticles + readArticleLinks) + "," + time
+				+ "," + results.size();
 	}
 
 	static class RelationPage {

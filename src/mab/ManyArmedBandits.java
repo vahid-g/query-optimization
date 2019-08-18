@@ -24,8 +24,8 @@ public class ManyArmedBandits {
 	static final String ARTICLE_LINK_TABLE = "sample_article_link_1p"; // "tbl_article_link_09";
 	static final int ARTICLE_LINK_SIZE = 1225105; // 120916125;
 
-	private int pageSize = 1024; // 64, 256, 1024
-	private int resultSizeK = 10; // 10, 100, 1000
+	private int pageSize = 1024;
+	private int resultSizeK = 10;
 
 	private int readArticleLinks = 0;
 	private int readArticles = 0;
@@ -34,13 +34,13 @@ public class ManyArmedBandits {
 
 	// args[0] can be "mrun" or "nested"
 	public static void main(String[] args) throws IOException {
-		int[] kValues = { 10, 100, 1000 };
-		int[] pageSizeValues = { 64, 256, 1024 };
+		int[] kValues = {10, 100, 1000};
+		int[] pageSizeValues = { 64 };
 		StringBuilder sb = new StringBuilder();
 		sb.append("k, page-size, article-pages, link-pages, total-pages, time, result-size\r\n");
 		for (int k : kValues) {
 			for (int p : pageSizeValues) {
-				int[] results = new ManyArmedBandits(k, p).runExperiment(args[0]);
+				int[] results = runExperiment(args[0], k, p);
 				sb.append(k + ", " + p);
 				for (int r : results) {
 					sb.append(", " + r);
@@ -58,16 +58,16 @@ public class ManyArmedBandits {
 		this.pageSize = p;
 	}
 
-	public int[] runExperiment(String method) throws IOException {
+	public static int[] runExperiment(String method, int k, int p) throws IOException {
 		int[] result = new int[5];
 		int[] partial = null;
 		int loop = 10;
 		for (int i = 0; i < loop; i++) {
 			System.out.println("starting experiment #" + i + " at: " + new Date().toString());
 			if (method.equals("mrun")) {
-				partial = mRunPaged();
+				partial = new ManyArmedBandits(k, p).mRunPaged();
 			} else {
-				partial = nestedLoop();
+				partial = new ManyArmedBandits(k, p).nestedLoop();
 			}
 			for (int j = 0; j < 5; j++) {
 				result[j] += partial[j];
@@ -158,6 +158,7 @@ public class ManyArmedBandits {
 							results.add(linkArticleId + "-" + linkSelectResult.getInt(2));
 						}
 					}
+					readArticleLinkPages++;
 					linkSelectResult.absolute(lastArticleLinkRow);
 					if (results.size() > resultSizeK) {
 						break;
@@ -234,25 +235,33 @@ public class ManyArmedBandits {
 							ResultSet.CONCUR_READ_ONLY)) {
 				System.out.println("Default fetch size for articles: " + articleSelect.getFetchSize());
 				linkSelect.setFetchSize(Integer.MIN_VALUE);
-				ResultSet articleSelectResult = articleSelect.executeQuery("SELECT id FROM " + ARTICLE_TABLE + ";");
+				ResultSet articleSelectResult = articleSelect
+						.executeQuery("SELECT id FROM " + ARTICLE_TABLE + " order by rand();");
 				ResultSet linkSelectResult = linkSelect
 						.executeQuery("SELECT article_id, link_id FROM " + ARTICLE_LINK_TABLE + " order by rand();");
 				long start = System.currentTimeMillis();
 				while (results.size() < resultSizeK) {
 					RelationPage articlePage = readNextArticlePage(articleSelectResult);
-					List<ArticleLinkDAO> articleLinkList = readNextArticleLinkPage(linkSelectResult);
-					while (articleLinkList.size() > 0 && results.size() < resultSizeK) {
+					List<ArticleLinkDAO> articleLinkList;
+					while (results.size() < resultSizeK) {
+						articleLinkList = readNextArticleLinkPage(linkSelectResult);
+						if (articleLinkList == null || articleLinkList.size() == 0) {
+							break;
+						}
 						for (ArticleLinkDAO articleLink : articleLinkList) {
 							if (articlePage.idSet.contains(articleLink.articleId)) {
 								results.add(articleLink.articleId + ", " + articleLink.linkId);
-								// TODO should we break if K results are found?
+								if (results.size() >= resultSizeK) {
+									break;
+								}
 							}
 						}
-						articleLinkList = readNextArticleLinkPage(linkSelectResult);
+
 					} // end inner loop of the join
 					linkSelectResult.first();
 				} // end outer loop of the join
 				runtime = System.currentTimeMillis() - start;
+				System.out.println("read article pages: " + readArticlePages);
 				linkSelectResult.close();
 			} // end try for statements
 		} catch (SQLException e) {

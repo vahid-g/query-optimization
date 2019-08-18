@@ -35,7 +35,7 @@ public class ManyArmedBandits {
 	// args[0] can be "mrun" or "nested"
 	public static void main(String[] args) throws IOException {
 		int[] kValues = {10, 100, 1000};
-		int[] pageSizeValues = { 64 };
+		int[] pageSizeValues = { 64, 256, 1024 };
 		StringBuilder sb = new StringBuilder();
 		sb.append("k, page-size, article-pages, link-pages, total-pages, time, result-size\r\n");
 		for (int k : kValues) {

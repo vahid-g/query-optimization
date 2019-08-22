@@ -20,9 +20,9 @@ import database.DatabaseManager;
 // many armed bandit strategies
 public class ManyArmedBandits {
 
-	static final String ARTICLE_TABLE = "sample_article_1p"; // "tbl_article_09";
-	static final String ARTICLE_LINK_TABLE = "sample_article_link_1p"; // "tbl_article_link_09";
-	static final int ARTICLE_LINK_SIZE = 1225105; // 120916125;
+	static final String ARTICLE_TABLE = "tbl_article_09";// "sample_article_1p";
+	static final String ARTICLE_LINK_TABLE = "tbl_article_link_09"; // "sample_article_link_1p";
+	static final int ARTICLE_LINK_SIZE = 120916125; // 1225105;
 
 	private int pageSize = 1024;
 	private int resultSizeK = 10;
@@ -38,8 +38,8 @@ public class ManyArmedBandits {
 		int[] pageSizeValues = { 64, 256, 1024 };
 		StringBuilder sb = new StringBuilder();
 		sb.append("k, page-size, article-pages, link-pages, total-pages, time, result-size\r\n");
-		for (int k : kValues) {
-			for (int p : pageSizeValues) {
+		for (int p : pageSizeValues) {
+			for (int k : kValues) {
 				int[] results = runExperiment(args[0], k, p);
 				sb.append(k + ", " + p);
 				for (int r : results) {

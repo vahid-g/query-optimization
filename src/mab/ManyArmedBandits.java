@@ -40,6 +40,8 @@ public class ManyArmedBandits {
 		sb.append("k, page-size, article-pages, link-pages, total-pages, time, result-size\r\n");
 		for (int p : pageSizeValues) {
 			for (int k : kValues) {
+				System.out.println("==========");
+				System.out.println("Experimenting " + args[0] + " with k = " + k + " page-size = " + p);
 				int[] results = runExperiment(args[0], k, p);
 				sb.append(k + ", " + p);
 				for (int r : results) {
@@ -63,7 +65,7 @@ public class ManyArmedBandits {
 		int[] partial = null;
 		int loop = 10;
 		for (int i = 0; i < loop; i++) {
-			System.out.println("starting experiment #" + i + " at: " + new Date().toString());
+			System.out.println(" Starting experiment #" + i + " at: " + new Date().toString());
 			if (method.equals("mrun")) {
 				partial = new ManyArmedBandits(k, p).mRunPaged();
 			} else {
@@ -72,7 +74,7 @@ public class ManyArmedBandits {
 			for (int j = 0; j < 5; j++) {
 				result[j] += partial[j];
 			}
-			System.out.println("end of experiment " + new Date().toString());
+			System.out.println(" End of experiment " + new Date().toString());
 		}
 		for (int i = 0; i < result.length; i++) {
 			result[i] /= loop;
@@ -90,13 +92,13 @@ public class ManyArmedBandits {
 					Statement linkSelect = connection2.createStatement(ResultSet.TYPE_SCROLL_INSENSITIVE,
 							ResultSet.CONCUR_READ_ONLY)) {
 				// articleSelect.setFetchSize(Integer.MIN_VALUE);
-				System.out.println("Default fetch size for articles: " + articleSelect.getFetchSize());
 				linkSelect.setFetchSize(Integer.MIN_VALUE);
 				ResultSet articleSelectResult = articleSelect
 						.executeQuery("SELECT id FROM " + ARTICLE_TABLE + " order by rand();");
 				ResultSet linkSelectResult = linkSelect
 						.executeQuery("SELECT article_id, link_id FROM " + ARTICLE_LINK_TABLE + " order by rand();");
 				double m = Math.sqrt(ARTICLE_LINK_SIZE / pageSize);
+				System.out.println("  estimated n = " + ARTICLE_LINK_SIZE / pageSize + " m = " + m);
 				PriorityQueue<RelationPage> activePageHeap = new PriorityQueue<RelationPage>(pageSize,
 						new Comparator<RelationPage>() {
 							@Override
@@ -109,7 +111,7 @@ public class ManyArmedBandits {
 				boolean successfulPrevJoin = false;
 				List<ArticleLinkDAO> articleLinkBufferList = null;
 				RelationPage currentPage = readNextArticlePage(articleSelectResult);
-				System.out.println("running first m runs");
+				System.out.println("  running first m runs");
 				while (activePageHeap.size() < m) {
 					if (results.size() >= resultSizeK) {
 						System.out.println("found " + resultSizeK + " results in first m run");
@@ -141,20 +143,20 @@ public class ManyArmedBandits {
 						currentPage = readNextArticlePage(articleSelectResult);
 					}
 				}
-				System.out.println("after phase one: ");
-				System.out.println("articles: " + readArticles + " article-links: " + readArticleLinks
+				System.out.println("  after phase one: ");
+				System.out.println("  articles: " + readArticles + " article-links: " + readArticleLinks
 						+ " articlePages: " + readArticlePages + " articleLinkPages: " + readArticleLinkPages);
-				System.out.println("running phase two");
+				System.out.println("  running phase two");
 				int phaseTwoIterations = 0;
 				while (results.size() < resultSizeK) {
 					phaseTwoIterations++;
 					// find the best page
 					RelationPage bestPage = activePageHeap.poll();
-					System.out.println("  value of best page: " + bestPage.value);
+					System.out.println("    value of best page: " + bestPage.value);
 					// join the best page
 					// TODO note that best page may have a value of zero
 					if (bestPage.value == 0) {
-						System.out.println("  best page has zero value!!!");
+						System.out.println("    best page has zero value!!!");
 					}
 					Set<Integer> articleIds = bestPage.idSet;
 					int lastArticleLinkRow = readArticleLinks;
@@ -173,13 +175,13 @@ public class ManyArmedBandits {
 					// read new article page
 					currentPage = readNextArticlePage(articleSelectResult);
 					if (currentPage.idSet.size() < pageSize) {
-						System.out.println("  reached end of article!!!");
+						System.out.println("    reached end of article!!!");
 						break;
 					}
 					// read new article-link page
 					articleLinkBufferList = readNextArticleLinkPage(linkSelectResult);
 					if (articleLinkBufferList.size() == 0) {
-						System.out.println("  reached end of article-link!!!");
+						System.out.println("    reached end of article-link!!!");
 						break;
 					}
 					// join new page with next article-link page
@@ -194,11 +196,12 @@ public class ManyArmedBandits {
 					activePageHeap.add(currentPage);
 				}
 				runtime = System.currentTimeMillis() - start;
-				System.out.println("phase two iterations: " + phaseTwoIterations);
-				System.out.println("read articles: " + readArticles);
-				System.out.println("read article pages: " + readArticlePages);
-				System.out.println("results size: " + results.size());
-				System.out.println("time(ms) = " + runtime);
+				System.out.println("  phase two iterations: " + phaseTwoIterations);
+				System.out.println("  read articles: " + readArticles);
+				System.out.println("  read article pages: " + readArticlePages);
+				System.out.println("  read article-link pages: " + readArticleLinkPages);
+				System.out.println("  results size: " + results.size());
+				System.out.println("  time(ms) = " + runtime);
 				linkSelectResult.close();
 			}
 			return new int[] { readArticlePages, readArticleLinkPages, (readArticlePages + readArticleLinkPages),

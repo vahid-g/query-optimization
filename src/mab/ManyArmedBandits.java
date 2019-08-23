@@ -89,9 +89,8 @@ public class ManyArmedBandits {
 		try (Connection connection1 = DatabaseManager.createConnection();
 				Connection connection2 = DatabaseManager.createConnection()) {
 			try (Statement articleSelect = connection1.createStatement();
-					Statement linkSelect = connection2.createStatement(ResultSet.TYPE_SCROLL_INSENSITIVE,
+					Statement linkSelect = connection2.createStatement(ResultSet.TYPE_SCROLL_SENSITIVE,
 							ResultSet.CONCUR_READ_ONLY)) {
-				// articleSelect.setFetchSize(Integer.MIN_VALUE);
 				linkSelect.setFetchSize(Integer.MIN_VALUE);
 				ResultSet articleSelectResult = articleSelect
 						.executeQuery("SELECT id FROM " + ARTICLE_TABLE + " order by rand();");

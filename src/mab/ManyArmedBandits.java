@@ -92,12 +92,16 @@ public class ManyArmedBandits {
 					Statement linkSelect = connection2.createStatement(ResultSet.TYPE_SCROLL_SENSITIVE,
 							ResultSet.CONCUR_READ_ONLY)) {
 				linkSelect.setFetchSize(Integer.MIN_VALUE);
+				System.out.println("ResultSet is scroll insensitive: "
+						+ (linkSelect.getResultSetType() == ResultSet.TYPE_SCROLL_INSENSITIVE));
+				System.out.println("ResultSet is scroll sensitive: "
+						+ (linkSelect.getResultSetType() == ResultSet.TYPE_SCROLL_SENSITIVE));
 				ResultSet articleSelectResult = articleSelect
 						.executeQuery("SELECT id FROM " + ARTICLE_TABLE + " order by rand();");
 				ResultSet linkSelectResult = linkSelect
 						.executeQuery("SELECT article_id, link_id FROM " + ARTICLE_LINK_TABLE + " order by rand();");
 				double m = Math.sqrt(ARTICLE_LINK_SIZE / pageSize);
-				System.out.println("  estimated n = " + ARTICLE_LINK_SIZE / pageSize + " m = " + m);
+				System.out.printf("  estimated n = %d m = %d \r\n" + ARTICLE_LINK_SIZE / pageSize, m);
 				PriorityQueue<RelationPage> activePageHeap = new PriorityQueue<RelationPage>(pageSize,
 						new Comparator<RelationPage>() {
 							@Override

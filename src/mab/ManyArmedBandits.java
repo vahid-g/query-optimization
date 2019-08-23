@@ -98,7 +98,7 @@ public class ManyArmedBandits {
 				ResultSet linkSelectResult = linkSelect
 						.executeQuery("SELECT article_id, link_id FROM " + ARTICLE_LINK_TABLE + " order by rand();");
 				double m = Math.sqrt(ARTICLE_LINK_SIZE / pageSize);
-				System.out.printf("  estimated n = %.0f m = %.0f \r\n", (ARTICLE_LINK_SIZE / pageSize), m);
+				System.out.printf("  estimated n = %d m = %.0f \r\n", (ARTICLE_LINK_SIZE / pageSize), m);
 				PriorityQueue<RelationPage> activePageHeap = new PriorityQueue<RelationPage>(pageSize,
 						new Comparator<RelationPage>() {
 							@Override

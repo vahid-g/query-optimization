@@ -6,6 +6,7 @@ import java.io.PrintWriter;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.SQLWarning;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -87,21 +88,17 @@ public class ManyArmedBandits {
 		List<String> results = new ArrayList<String>();
 		long runtime = -1;
 		try (Connection connection1 = DatabaseManager.createConnection();
-				Connection connection2 = DatabaseManager.createConnection()) {
+				Connection connection2 = DatabaseManager.createConnection();
+				Connection connection3 = DatabaseManager.createConnection()) {
 			try (Statement articleSelect = connection1.createStatement();
-					Statement linkSelect = connection2.createStatement(ResultSet.TYPE_SCROLL_SENSITIVE,
-							ResultSet.CONCUR_READ_ONLY)) {
+					Statement linkSelect = connection2.createStatement()) {
 				linkSelect.setFetchSize(Integer.MIN_VALUE);
-				System.out.println("ResultSet is scroll insensitive: "
-						+ (linkSelect.getResultSetType() == ResultSet.TYPE_SCROLL_INSENSITIVE));
-				System.out.println("ResultSet is scroll sensitive: "
-						+ (linkSelect.getResultSetType() == ResultSet.TYPE_SCROLL_SENSITIVE));
 				ResultSet articleSelectResult = articleSelect
 						.executeQuery("SELECT id FROM " + ARTICLE_TABLE + " order by rand();");
 				ResultSet linkSelectResult = linkSelect
 						.executeQuery("SELECT article_id, link_id FROM " + ARTICLE_LINK_TABLE + " order by rand();");
 				double m = Math.sqrt(ARTICLE_LINK_SIZE / pageSize);
-				System.out.printf("  estimated n = %d m = %d \r\n" + ARTICLE_LINK_SIZE / pageSize, m);
+				System.out.printf("  estimated n = %.0f m = %.0f \r\n", (ARTICLE_LINK_SIZE / pageSize), m);
 				PriorityQueue<RelationPage> activePageHeap = new PriorityQueue<RelationPage>(pageSize,
 						new Comparator<RelationPage>() {
 							@Override
@@ -162,22 +159,30 @@ public class ManyArmedBandits {
 						System.out.println("    best page has zero value!!!");
 					}
 					Set<Integer> articleIds = bestPage.idSet;
-					int lastArticleLinkRow = readArticleLinks;
-					while (linkSelectResult.next() && results.size() < resultSizeK) {
-						int linkArticleId = linkSelectResult.getInt(1);
-						if (articleIds.contains(linkArticleId)) {
-							results.add(linkArticleId + "-" + linkSelectResult.getInt(2));
+					try (Statement wholeLinkSelect = connection3.createStatement()) {
+						ResultSet wholeLinkSelectResult = wholeLinkSelect
+								.executeQuery("SELECT article_id, link_id FROM " + ARTICLE_LINK_TABLE + ";");
+						int linkCounter = 0;
+						int linkPageCounter = 1;
+						while (wholeLinkSelectResult.next() && results.size() < resultSizeK) {
+							linkCounter++;
+							if (linkCounter % pageSize == 0) {
+								linkPageCounter++;
+							}
+							int linkArticleId = linkSelectResult.getInt(1);
+							if (articleIds.contains(linkArticleId)) {
+								results.add(linkArticleId + "-" + linkSelectResult.getInt(2));
+							}
 						}
+						readArticleLinkPages += linkPageCounter;
 					}
-					readArticleLinkPages++;
-					linkSelectResult.absolute(lastArticleLinkRow);
 					if (results.size() > resultSizeK) {
 						break;
 					}
 
 					// read new article page
 					currentPage = readNextArticlePage(articleSelectResult);
-					if (currentPage.idSet.size() < pageSize) {
+					if (currentPage.idSet.size() == 0) {
 						System.out.println("    reached end of article!!!");
 						break;
 					}

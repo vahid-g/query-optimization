@@ -6,7 +6,6 @@ import java.io.PrintWriter;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.SQLWarning;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -145,7 +144,8 @@ public class ManyArmedBandits {
 				}
 				System.out.println("  after phase one: ");
 				System.out.println("  articles: " + readArticles + " article-links: " + readArticleLinks
-						+ " articlePages: " + readArticlePages + " articleLinkPages: " + readArticleLinkPages);
+						+ " articlePages: " + readArticlePages + " articleLinkPages: " + readArticleLinkPages
+						+ " size: " + results.size());
 				System.out.println("  running phase two");
 				int phaseTwoIterations = 0;
 				while (results.size() < resultSizeK) {

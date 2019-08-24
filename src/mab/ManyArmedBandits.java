@@ -35,14 +35,15 @@ public class ManyArmedBandits {
 	// args[0] can be "mrun" or "nested"
 	public static void main(String[] args) throws IOException {
 		int[] kValues = { 10, 100, 1000 };
-		int[] pageSizeValues = { 64, 256, 1024 };
+		int[] pageSizeValues = { 64 }; // , 256, 1024 };
+		int[] randSeed = { 0, 5, 8, 22, 23 };
 		StringBuilder sb = new StringBuilder();
 		sb.append("k, page-size, article-pages, link-pages, total-pages, time, result-size\r\n");
 		for (int p : pageSizeValues) {
 			for (int k : kValues) {
 				System.out.println("==========");
 				System.out.println("Experimenting " + args[0] + " with k = " + k + " page-size = " + p);
-				int[] results = runExperiment(args[0], k, p);
+				int[] results = runExperiment(args[0], k, p, randSeed);
 				sb.append(k + ", " + p);
 				for (int r : results) {
 					sb.append(", " + r);
@@ -60,16 +61,15 @@ public class ManyArmedBandits {
 		this.pageSize = p;
 	}
 
-	public static int[] runExperiment(String method, int k, int p) throws IOException {
+	public static int[] runExperiment(String method, int k, int p, int[] randSeed) throws IOException {
 		int[] result = new int[5];
 		int[] partial = null;
-		int loop = 10;
-		for (int i = 0; i < loop; i++) {
+		for (int i = 0; i < randSeed.length; i++) {
 			System.out.println(" Starting experiment #" + i + " at: " + new Date().toString());
 			if (method.equals("mrun")) {
-				partial = new ManyArmedBandits(k, p).mRunPaged();
+				partial = new ManyArmedBandits(k, p).mRunPaged(randSeed[i]);
 			} else {
-				partial = new ManyArmedBandits(k, p).nestedLoop();
+				partial = new ManyArmedBandits(k, p).nestedLoop(randSeed[i]);
 			}
 			for (int j = 0; j < 5; j++) {
 				result[j] += partial[j];
@@ -77,13 +77,13 @@ public class ManyArmedBandits {
 			System.out.println(" End of experiment " + new Date().toString());
 		}
 		for (int i = 0; i < result.length; i++) {
-			result[i] /= loop;
+			result[i] /= randSeed.length;
 		}
 		return result;
 	}
 
 	// m-run strategy with pages as arms
-	private int[] mRunPaged() {
+	private int[] mRunPaged(int randSeed) {
 		List<String> results = new ArrayList<String>();
 		long runtime = -1;
 		try (Connection connection1 = DatabaseManager.createConnection();
@@ -93,9 +93,9 @@ public class ManyArmedBandits {
 					Statement linkSelect = connection2.createStatement()) {
 				linkSelect.setFetchSize(Integer.MIN_VALUE);
 				ResultSet articleSelectResult = articleSelect
-						.executeQuery("SELECT id FROM " + ARTICLE_TABLE + " order by rand();");
-				ResultSet linkSelectResult = linkSelect
-						.executeQuery("SELECT article_id, link_id FROM " + ARTICLE_LINK_TABLE + " order by rand();");
+						.executeQuery("SELECT id FROM " + ARTICLE_TABLE + " order by rand(" + randSeed + ");");
+				ResultSet linkSelectResult = linkSelect.executeQuery(
+						"SELECT article_id, link_id FROM " + ARTICLE_LINK_TABLE + " order by rand(" + randSeed + ");");
 				double m = Math.sqrt(ARTICLE_LINK_SIZE / pageSize);
 				System.out.printf("  estimated n = %d m = %.0f \r\n", (ARTICLE_LINK_SIZE / pageSize), m);
 				PriorityQueue<RelationPage> activePageHeap = new PriorityQueue<RelationPage>(pageSize,
@@ -142,9 +142,8 @@ public class ManyArmedBandits {
 						currentPage = readNextArticlePage(articleSelectResult);
 					}
 				}
-				System.out.println("  after phase one: ");
-				System.out.println("  articles: " + readArticles + " article-links: " + readArticleLinks
-						+ " articlePages: " + readArticlePages + " articleLinkPages: " + readArticleLinkPages
+				System.out.println("  phase one done.");
+				System.out.println("  articlePages: " + readArticlePages + " articleLinkPages: " + readArticleLinkPages
 						+ " size: " + results.size());
 				System.out.println("  running phase two");
 				int phaseTwoIterations = 0;
@@ -154,10 +153,7 @@ public class ManyArmedBandits {
 					RelationPage bestPage = activePageHeap.poll();
 					System.out.println("    value of best page: " + bestPage.value);
 					// join the best page
-					// TODO note that best page may have a value of zero
-					if (bestPage.value == 0) {
-						System.out.println("    best page has zero value!!!");
-					}
+					// note that best page may have a value of zero
 					Set<Integer> articleIds = bestPage.idSet;
 					try (Statement wholeLinkSelect = connection3.createStatement()) {
 						ResultSet wholeLinkSelectResult = wholeLinkSelect
@@ -207,6 +203,7 @@ public class ManyArmedBandits {
 				System.out.println("  phase two iterations: " + phaseTwoIterations);
 				System.out.println("  read articles: " + readArticles);
 				System.out.println("  read article pages: " + readArticlePages);
+				System.out.println("  read article links: " + readArticleLinks);
 				System.out.println("  read article-link pages: " + readArticleLinkPages);
 				System.out.println("  results size: " + results.size());
 				System.out.println("  time(ms) = " + runtime);
@@ -242,7 +239,7 @@ public class ManyArmedBandits {
 		return currentPage;
 	}
 
-	private int[] nestedLoop() {
+	private int[] nestedLoop(int randSeed) {
 		List<String> results = new ArrayList<String>();
 		long runtime = 0;
 		try (Connection connection1 = DatabaseManager.createConnection();
@@ -253,9 +250,9 @@ public class ManyArmedBandits {
 				System.out.println("Default fetch size for articles: " + articleSelect.getFetchSize());
 				linkSelect.setFetchSize(Integer.MIN_VALUE);
 				ResultSet articleSelectResult = articleSelect
-						.executeQuery("SELECT id FROM " + ARTICLE_TABLE + " order by rand();");
-				ResultSet linkSelectResult = linkSelect
-						.executeQuery("SELECT article_id, link_id FROM " + ARTICLE_LINK_TABLE + " order by rand();");
+						.executeQuery("SELECT id FROM " + ARTICLE_TABLE + " order by rand(" + randSeed + ");");
+				ResultSet linkSelectResult = linkSelect.executeQuery(
+						"SELECT article_id, link_id FROM " + ARTICLE_LINK_TABLE + " order by rand(" + randSeed + ");");
 				long start = System.currentTimeMillis();
 				while (results.size() < resultSizeK) {
 					RelationPage articlePage = readNextArticlePage(articleSelectResult);

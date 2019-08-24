@@ -169,9 +169,9 @@ public class ManyArmedBandits {
 							if (linkCounter % pageSize == 0) {
 								linkPageCounter++;
 							}
-							int linkArticleId = linkSelectResult.getInt(1);
+							int linkArticleId = wholeLinkSelectResult.getInt(1);
 							if (articleIds.contains(linkArticleId)) {
-								results.add(linkArticleId + "-" + linkSelectResult.getInt(2));
+								results.add(linkArticleId + "-" + wholeLinkSelectResult.getInt(2));
 							}
 						}
 						readArticleLinkPages += linkPageCounter;

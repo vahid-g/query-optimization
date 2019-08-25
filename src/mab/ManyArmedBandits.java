@@ -157,20 +157,18 @@ public class ManyArmedBandits {
 					Set<Integer> articleIds = bestPage.idSet;
 					try (Statement wholeLinkSelect = connection3.createStatement()) {
 						ResultSet wholeLinkSelectResult = wholeLinkSelect
-								.executeQuery("SELECT article_id, link_id FROM " + ARTICLE_LINK_TABLE + ";");
+								.executeQuery("SELECT article_id, link_id FROM " + ARTICLE_LINK_TABLE
+										+ " order by rand(" + randSeed + ");");
 						int linkCounter = 0;
-						int linkPageCounter = 1;
 						while (wholeLinkSelectResult.next() && results.size() < resultSizeK) {
 							linkCounter++;
-							if (linkCounter % pageSize == 0) {
-								linkPageCounter++;
-							}
 							int linkArticleId = wholeLinkSelectResult.getInt(1);
 							if (articleIds.contains(linkArticleId)) {
 								results.add(linkArticleId + "-" + wholeLinkSelectResult.getInt(2));
 							}
 						}
-						readArticleLinkPages += linkPageCounter;
+						System.out.println("    innder article-link pages: " + (linkCounter / pageSize));
+						readArticleLinkPages += (linkCounter / pageSize);
 					}
 					if (results.size() > resultSizeK) {
 						break;

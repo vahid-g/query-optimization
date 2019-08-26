@@ -34,9 +34,9 @@ public class ManyArmedBandits {
 
 	// args[0] can be "mrun" or "nested"
 	public static void main(String[] args) throws IOException {
-		int[] kValues = { 10, 100, 1000 };
-		int[] pageSizeValues = { 64 , 256, 1024 };
-		int[] randSeed = { 0, 5, 8, 22, 23 };
+		int[] kValues = { 10, 100, 1000, 10000 };
+		int[] pageSizeValues = { 64, 256, 1024 };
+		int[] randSeed = { 0, 5, 8, 22, 23, 2, 1000, 66 };
 		StringBuilder sb = new StringBuilder();
 		sb.append("k, page-size, article-pages, link-pages, total-pages, time, result-size\r\n");
 		for (int p : pageSizeValues) {
@@ -167,8 +167,14 @@ public class ManyArmedBandits {
 								results.add(linkArticleId + "-" + wholeLinkSelectResult.getInt(2));
 							}
 						}
-						System.out.println("    innder article-link pages: " + (linkCounter / pageSize));
+						System.out.println("    inner article-link pages: " + (linkCounter / pageSize));
 						readArticleLinkPages += (linkCounter / pageSize);
+						try {
+							wholeLinkSelectResult.close();
+						} catch (SQLException e) {
+							System.err.println("     couldn't close inner resultset!!!");
+							e.printStackTrace();
+						}
 					}
 					if (results.size() > resultSizeK) {
 						break;
@@ -205,7 +211,12 @@ public class ManyArmedBandits {
 				System.out.println("  read article-link pages: " + readArticleLinkPages);
 				System.out.println("  results size: " + results.size());
 				System.out.println("  time(ms) = " + runtime);
-				linkSelectResult.close();
+				try {
+					linkSelectResult.close();
+				} catch (SQLException e) {
+					System.err.println("  couldn't close outer resultset!!!");
+					e.printStackTrace();
+				}
 			}
 			return new int[] { readArticlePages, readArticleLinkPages, (readArticlePages + readArticleLinkPages),
 					(int) runtime, results.size() };

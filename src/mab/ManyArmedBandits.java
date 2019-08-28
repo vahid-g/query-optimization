@@ -20,23 +20,28 @@ import database.DatabaseManager;
 // many armed bandit strategies
 public class ManyArmedBandits {
 
-	static final String ARTICLE_TABLE = "tbl_article_09";// "sample_article_1p";
-	static final String ARTICLE_LINK_TABLE = "tbl_article_link_09"; // "sample_article_link_1p";
+	// static final String ARTICLE_TABLE = "tbl_article_09";
+	// static final String ARTICLE_LINK_TABLE = "tbl_article_link_09";
+	static final String ARTICLE_TABLE = "sample_article_1p";
+	static final String ARTICLE_LINK_TABLE = "sample_article_link_1p";
 	static final int ARTICLE_LINK_SIZE = 120916125; // 1225105;
+	static final double DISCOUNT = 0.9;
 
-	private int pageSize = 1024;
-	private int resultSizeK = 10;
+	private int pageSize;
+	private int resultSizeK;
 
 	private int readArticleLinks = 0;
 	private int readArticles = 0;
 	private int readArticlePages = 0;
 	private int readArticleLinkPages = 0;
 
+	private int[] readPagesForK;
+
 	// args[0] can be "mrun" or "nested"
 	public static void main(String[] args) throws IOException {
 		// int[] kValues = { 10, 100, 1000, 10000 };
 		// int[] pageSizeValues = { 64, 256, 1024 };
-		int[] kValues = { 10000 };
+		int[] kValues = { 1000 };
 		int[] pageSizeValues = { 64 };
 		int[] randSeed = { 3 }; // , 5, 8, 22, 23, 2, 1000, 66 };
 		StringBuilder sb = new StringBuilder();
@@ -45,9 +50,9 @@ public class ManyArmedBandits {
 			for (int k : kValues) {
 				System.out.println("==========");
 				System.out.println("Experimenting " + args[0] + " with k = " + k + " page-size = " + p);
-				int[] results = runExperiment(args[0], k, p, randSeed);
+				double[] results = runExperiment(args[0], k, p, randSeed);
 				sb.append(k + ", " + p);
-				for (int r : results) {
+				for (double r : results) {
 					sb.append(", " + r);
 				}
 				sb.append("\r\n");
@@ -61,17 +66,19 @@ public class ManyArmedBandits {
 	public ManyArmedBandits(int k, int p) {
 		this.resultSizeK = k;
 		this.pageSize = p;
+		readPagesForK = new int[k];
 	}
 
-	public static int[] runExperiment(String method, int k, int p, int[] randSeed) throws IOException {
-		int[] result = new int[5];
-		int[] partial = null;
+	public static double[] runExperiment(String method, int k, int p, int[] randSeed) throws IOException {
+		double[] result = new double[6];
+		double[] partial = null;
 		for (int i = 0; i < randSeed.length; i++) {
 			System.out.println(" Starting experiment #" + i + " at: " + new Date().toString());
+			ManyArmedBandits mab = new ManyArmedBandits(k, p);
 			if (method.equals("mrun")) {
-				partial = new ManyArmedBandits(k, p).mRunPaged(randSeed[i]);
+				partial = mab.mRunPaged(randSeed[i]);
 			} else {
-				partial = new ManyArmedBandits(k, p).nestedLoop(randSeed[i]);
+				partial = mab.nestedLoop(randSeed[i]);
 			}
 			for (int j = 0; j < 5; j++) {
 				result[j] += partial[j];
@@ -85,7 +92,7 @@ public class ManyArmedBandits {
 	}
 
 	// m-run strategy with pages as arms
-	private int[] mRunPaged(int randSeed) {
+	private double[] mRunPaged(int randSeed) {
 		List<String> results = new ArrayList<String>();
 		long runtime = -1;
 		try (Connection connection1 = DatabaseManager.createConnection();
@@ -132,6 +139,8 @@ public class ManyArmedBandits {
 						int articleLinkId = articleLinkBufferList.get(i).articleId;
 						if (currentPage.idSet.contains(articleLinkBufferList.get(i).articleId)) {
 							results.add(articleLinkId + "-" + articleLinkBufferList.get(i).linkId);
+							// discAverage += Math.pow(discFactor, results.size()) * readArticleLinkPages;
+							readPagesForK[results.size()] = readArticleLinks + readArticleLinkPages;
 							currentSuccessCount++;
 							successfulPrevJoin = true;
 						}
@@ -167,6 +176,8 @@ public class ManyArmedBandits {
 							int linkArticleId = wholeLinkSelectResult.getInt(1);
 							if (articleIds.contains(linkArticleId)) {
 								results.add(linkArticleId + "-" + wholeLinkSelectResult.getInt(2));
+								// discAverage += Math.pow(discFactor, results.size()) * readArticleLinkPages;
+								readPagesForK[results.size()] = readArticleLinks + readArticleLinkPages;
 							}
 						}
 						System.out.println("    inner article-link pages: " + (linkCounter / pageSize));
@@ -199,6 +210,8 @@ public class ManyArmedBandits {
 						int articleLinkId = articleLinkBufferList.get(i).articleId;
 						if (currentPage.idSet.contains(articleLinkId)) {
 							results.add(articleLinkId + "-" + articleLinkBufferList.get(i).linkId);
+							// discAverage += Math.pow(discFactor, results.size()) * readArticleLinkPages;
+							readPagesForK[results.size()] = readArticleLinks + readArticleLinkPages;
 							currentSuccessCount++;
 						}
 					}
@@ -229,8 +242,16 @@ public class ManyArmedBandits {
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
-		return new int[] { readArticlePages, readArticleLinkPages, (readArticlePages + readArticleLinkPages),
-				(int) runtime, results.size() };
+		return new double[] { readArticlePages, readArticleLinkPages, (readArticlePages + readArticleLinkPages),
+				(int) runtime, results.size(), getDiscountedAverage() };
+	}
+
+	private double getDiscountedAverage() {
+		double discAverageK = 0;
+		for (int j = 0; j < this.resultSizeK; j++) {
+			discAverageK += Math.pow(0.9, resultSizeK) * this.readPagesForK[j];
+		}
+		return discAverageK;
 	}
 
 	private List<ArticleLinkDAO> readNextArticleLinkPage(ResultSet linkSelectResult) throws SQLException {
@@ -253,7 +274,7 @@ public class ManyArmedBandits {
 		return currentPage;
 	}
 
-	private int[] nestedLoop(int randSeed) {
+	private double[] nestedLoop(int randSeed) {
 		List<String> results = new ArrayList<String>();
 		long runtime = 0;
 		try (Connection connection1 = DatabaseManager.createConnection();
@@ -298,8 +319,8 @@ public class ManyArmedBandits {
 			e.printStackTrace();
 		}
 		System.out.println("read articles: " + readArticles);
-		return new int[] { readArticlePages, readArticleLinkPages, (readArticlePages + readArticleLinkPages),
-				(int) runtime, results.size() };
+		return new double[] { readArticlePages, readArticleLinkPages, (readArticlePages + readArticleLinkPages),
+				(int) runtime, results.size(), getDiscountedAverage() };
 	}
 
 	static class RelationPage {

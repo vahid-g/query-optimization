@@ -8,6 +8,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.HashSet;
@@ -39,28 +40,9 @@ public class ManyArmedBandits {
 
 	// args[0] can be "mrun" or "nested"
 	public static void main(String[] args) throws IOException {
-		// int[] kValues = { 10, 100, 1000, 10000 };
-		// int[] pageSizeValues = { 64, 256, 1024 };
-		int[] kValues = { 1000 };
-		int[] pageSizeValues = { 64 };
-		int[] randSeed = { 3 }; // , 5, 8, 22, 23, 2, 1000, 66 };
-		StringBuilder sb = new StringBuilder();
-		sb.append("k, page-size, article-pages, link-pages, total-pages, time, result-size\r\n");
-		for (int p : pageSizeValues) {
-			for (int k : kValues) {
-				System.out.println("==========");
-				System.out.println("Experimenting " + args[0] + " with k = " + k + " page-size = " + p);
-				double[] results = runExperiment(args[0], k, p, randSeed);
-				sb.append(k + ", " + p);
-				for (double r : results) {
-					sb.append(", " + r);
-				}
-				sb.append("\r\n");
-			}
-		}
-		try (PrintWriter pw = new PrintWriter(new FileWriter("result_" + args[0] + ".csv"))) {
-			pw.write(sb.toString());
-		}
+		ManyArmedBandits mab = new ManyArmedBandits(1000, 64);
+		double[] result = mab.mRunPaged(0);
+		System.out.println(Arrays.toString(result));
 	}
 
 	public ManyArmedBandits(int k, int p) {
@@ -69,26 +51,44 @@ public class ManyArmedBandits {
 		readPagesForK = new int[k];
 	}
 
-	public static double[] runExperiment(String method, int k, int p, int[] randSeed) throws IOException {
-		double[] result = new double[6];
-		double[] partial = null;
-		for (int i = 0; i < randSeed.length; i++) {
-			System.out.println(" Starting experiment #" + i + " at: " + new Date().toString());
-			ManyArmedBandits mab = new ManyArmedBandits(k, p);
-			if (method.equals("mrun")) {
-				partial = mab.mRunPaged(randSeed[i]);
-			} else {
-				partial = mab.nestedLoop(randSeed[i]);
+	public static void runExperiment(String method) throws IOException {
+		int[] kValues = { 1000 };
+		int[] pageSizeValues = { 64 };
+		int[] randSeed = { 3 }; // , 5, 8, 22, 23, 2, 1000, 66 };
+		StringBuilder sb = new StringBuilder();
+		sb.append("k, page-size, article-pages, link-pages, total-pages, time, result-size\r\n");
+		for (int p : pageSizeValues) {
+			for (int k : kValues) {
+				System.out.println("==========");
+				System.out.println("Experimenting " + method + " with k = " + k + " page-size = " + p);
+				double[] result = new double[3];
+				double[] partial = null;
+				for (int i = 0; i < randSeed.length; i++) {
+					System.out.println(" Starting experiment #" + i + " at: " + new Date().toString());
+					ManyArmedBandits mab = new ManyArmedBandits(k, p);
+					if (method.equals("mrun")) {
+						partial = mab.mRunPaged(randSeed[i]);
+					} else {
+						partial = mab.nestedLoop(randSeed[i]);
+					}
+					for (int j = 0; j < 5; j++) {
+						result[j] += partial[j];
+					}
+					System.out.println(" End of experiment " + new Date().toString());
+				}
+				for (int i = 0; i < result.length; i++) {
+					result[i] /= randSeed.length;
+				}
+				sb.append(k + ", " + p);
+				for (double r : result) {
+					sb.append(", " + r);
+				}
+				sb.append("\r\n");
 			}
-			for (int j = 0; j < 5; j++) {
-				result[j] += partial[j];
-			}
-			System.out.println(" End of experiment " + new Date().toString());
 		}
-		for (int i = 0; i < result.length; i++) {
-			result[i] /= randSeed.length;
+		try (PrintWriter pw = new PrintWriter(new FileWriter("result_" + method + ".csv"))) {
+			pw.write(sb.toString());
 		}
-		return result;
 	}
 
 	// m-run strategy with pages as arms
@@ -140,7 +140,7 @@ public class ManyArmedBandits {
 						if (currentPage.idSet.contains(articleLinkBufferList.get(i).articleId)) {
 							results.add(articleLinkId + "-" + articleLinkBufferList.get(i).linkId);
 							// discAverage += Math.pow(discFactor, results.size()) * readArticleLinkPages;
-							readPagesForK[results.size()] = readArticleLinks + readArticleLinkPages;
+							readPagesForK[results.size() - 1] = readArticleLinks + readArticleLinkPages;
 							currentSuccessCount++;
 							successfulPrevJoin = true;
 						}
@@ -177,7 +177,7 @@ public class ManyArmedBandits {
 							if (articleIds.contains(linkArticleId)) {
 								results.add(linkArticleId + "-" + wholeLinkSelectResult.getInt(2));
 								// discAverage += Math.pow(discFactor, results.size()) * readArticleLinkPages;
-								readPagesForK[results.size()] = readArticleLinks + readArticleLinkPages;
+								readPagesForK[results.size() - 1] = readArticleLinks + readArticleLinkPages;
 							}
 						}
 						System.out.println("    inner article-link pages: " + (linkCounter / pageSize));
@@ -211,7 +211,7 @@ public class ManyArmedBandits {
 						if (currentPage.idSet.contains(articleLinkId)) {
 							results.add(articleLinkId + "-" + articleLinkBufferList.get(i).linkId);
 							// discAverage += Math.pow(discFactor, results.size()) * readArticleLinkPages;
-							readPagesForK[results.size()] = readArticleLinks + readArticleLinkPages;
+							readPagesForK[results.size() - 1] = readArticleLinks + readArticleLinkPages;
 							currentSuccessCount++;
 						}
 					}
@@ -242,8 +242,7 @@ public class ManyArmedBandits {
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
-		return new double[] { readArticlePages, readArticleLinkPages, (readArticlePages + readArticleLinkPages),
-				(int) runtime, results.size(), getDiscountedAverage() };
+		return new double[] { readArticlePages, readArticleLinkPages, getDiscountedAverage() };
 	}
 
 	private double getDiscountedAverage() {

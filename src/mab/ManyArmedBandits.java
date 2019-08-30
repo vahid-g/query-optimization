@@ -23,9 +23,10 @@ public class ManyArmedBandits {
 
 	// static final String ARTICLE_TABLE = "tbl_article_09";
 	// static final String ARTICLE_LINK_TABLE = "tbl_article_link_09";
+	// static final int ARTICLE_LINK_SIZE = 120916125;
 	static final String ARTICLE_TABLE = "sample_article_1p";
 	static final String ARTICLE_LINK_TABLE = "sample_article_link_1p";
-	static final int ARTICLE_LINK_SIZE = 120916125; // 1225105;
+	static final int ARTICLE_LINK_SIZE = 1225105;
 	static final double DISCOUNT = 0.9;
 
 	private int pageSize;
@@ -40,21 +41,21 @@ public class ManyArmedBandits {
 
 	// args[0] can be "mrun" or "nested"
 	public static void main(String[] args) throws IOException {
-		int[] randSeed = { 3, 5, 8, 22, 23, 2, 1000, 66 };
-		double[] result = new double[3];
+		int[] randSeed = { 5, 6, 20, 666, 69 };
+		double[] result = new double[4];
 		for (int r : randSeed) {
 			double[] partial;
 			if (args[0].equals("mrun")) {
-				partial = new ManyArmedBandits(1000, 64).mRunPaged(r);
+				partial = new ManyArmedBandits(ARTICLE_LINK_SIZE / 2, 64).mRunPaged(r);
 			} else {
-				partial = new ManyArmedBandits(1000, 64).nestedLoop(r);
+				partial = new ManyArmedBandits(ARTICLE_LINK_SIZE / 2, 64).nestedLoop(r);
 			}
 			for (int i = 0; i < result.length; i++) {
 				result[i] += partial[i];
 			}
 		}
 		System.out.println("===========");
-		System.out.println("final results:");
+		System.out.println("average article pages, link pages and discounted average:");
 		for (int i = 0; i < result.length; i++) {
 			result[i] /= randSeed.length;
 		}
@@ -64,10 +65,10 @@ public class ManyArmedBandits {
 	public ManyArmedBandits(int k, int p) {
 		this.resultSizeK = k;
 		this.pageSize = p;
-		readPagesForK = new int[k];
+		readPagesForK = new int[resultSizeK];
 	}
 
-	public static void runExperiment(String method) throws IOException {
+	static void runExperiment(String method) throws IOException {
 		int[] kValues = { 100, 1000 };
 		int[] pageSizeValues = { 64, 256 };
 		int[] randSeed = { 3, 5, 8, 22, 23, 2, 1000, 66 };
@@ -196,7 +197,8 @@ public class ManyArmedBandits {
 								readPagesForK[results.size() - 1] = readArticleLinkPages + readArticleLinkPages;
 							}
 						}
-						System.out.println("    inner article-link pages: " + (linkCounter / pageSize));
+						System.out.println("    inner article-link pages scanned: " + (linkCounter / pageSize));
+						System.out.println("    result size: " + results.size());
 						readArticleLinkPages += (linkCounter / pageSize);
 						try {
 							wholeLinkSelectResult.close();
@@ -205,7 +207,7 @@ public class ManyArmedBandits {
 							e.printStackTrace();
 						}
 					}
-					if (results.size() > resultSizeK) {
+					if (results.size() >= resultSizeK) {
 						break;
 					}
 
@@ -222,13 +224,18 @@ public class ManyArmedBandits {
 						break;
 					}
 					// join new page with next article-link page
+					currentSuccessCount = 0;
 					for (int i = 0; i < articleLinkBufferList.size(); i++) {
 						int articleLinkId = articleLinkBufferList.get(i).articleId;
 						if (currentPage.idSet.contains(articleLinkId)) {
 							results.add(articleLinkId + "-" + articleLinkBufferList.get(i).linkId);
 							// discAverage += Math.pow(discFactor, results.size()) * readArticleLinkPages;
+							if (results.size() > resultSizeK) {
+								break;
+							}
 							readPagesForK[results.size() - 1] = readArticleLinkPages + readArticleLinkPages;
 							currentSuccessCount++;
+
 						}
 					}
 					currentPage.value = currentSuccessCount;
@@ -258,7 +265,8 @@ public class ManyArmedBandits {
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
-		return new double[] { readArticlePages, readArticleLinkPages, getDiscountedAverage() };
+		return new double[] { readArticlePages, readArticleLinkPages, readArticlePages + readArticleLinkPages,
+				getDiscountedAverage() };
 	}
 
 	private double getDiscountedAverage() {
@@ -291,7 +299,6 @@ public class ManyArmedBandits {
 
 	private double[] nestedLoop(int randSeed) {
 		List<String> results = new ArrayList<String>();
-		long runtime = 0;
 		try (Connection connection1 = DatabaseManager.createConnection();
 				Connection connection2 = DatabaseManager.createConnection()) {
 			try (Statement articleSelect = connection1.createStatement();
@@ -303,7 +310,6 @@ public class ManyArmedBandits {
 						.executeQuery("SELECT id FROM " + ARTICLE_TABLE + " order by rand(" + randSeed + ");");
 				ResultSet linkSelectResult = linkSelect.executeQuery(
 						"SELECT article_id, link_id FROM " + ARTICLE_LINK_TABLE + " order by rand(" + randSeed + ");");
-				long start = System.currentTimeMillis();
 				while (results.size() < resultSizeK) {
 					RelationPage articlePage = readNextArticlePage(articleSelectResult);
 					List<ArticleLinkDAO> articleLinkList;
@@ -325,8 +331,11 @@ public class ManyArmedBandits {
 					} // end inner loop of the join
 					linkSelectResult.first();
 				} // end outer loop of the join
-				runtime = System.currentTimeMillis() - start;
-				System.out.println("read article pages: " + readArticlePages);
+				System.out.println("  read articles: " + readArticles);
+				System.out.println("  read article pages: " + readArticlePages);
+				System.out.println("  read article links: " + readArticleLinks);
+				System.out.println("  read article-link pages: " + readArticleLinkPages);
+				System.out.println("  results size: " + results.size());
 				linkSelectResult.close();
 			} // end try for statements
 		} catch (SQLException e) {
@@ -335,7 +344,8 @@ public class ManyArmedBandits {
 			e.printStackTrace();
 		}
 		System.out.println("read articles: " + readArticles);
-		return new double[] { readArticlePages, readArticleLinkPages, getDiscountedAverage() };
+		return new double[] { readArticlePages, readArticleLinkPages, readArticlePages + readArticleLinkPages,
+				getDiscountedAverage() };
 	}
 
 	static class RelationPage {

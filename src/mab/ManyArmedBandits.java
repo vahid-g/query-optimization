@@ -64,13 +64,6 @@ public class ManyArmedBandits {
 		System.out.println(Arrays.toString(result));
 	}
 
-	public ManyArmedBandits(int k, int p) {
-		resultSizeK = k;
-		pageSize = p;
-		readPagesForK = new int[resultSizeK];
-		System.out.println("MAB initialized with k = " + resultSizeK + " page-size = ");
-	}
-
 	public static void runExperiment(String method) throws IOException {
 		int[] kValues = { 100, 1000 };
 		int[] pageSizeValues = { 64, 256 };
@@ -109,6 +102,13 @@ public class ManyArmedBandits {
 		try (PrintWriter pw = new PrintWriter(new FileWriter("result_" + method + ".csv"))) {
 			pw.write(sb.toString());
 		}
+	}
+
+	public ManyArmedBandits(int k, int p) {
+		resultSizeK = k;
+		pageSize = p;
+		readPagesForK = new int[resultSizeK];
+		System.out.println("MAB initialized with k = " + resultSizeK + " page-size = " + p);
 	}
 
 	// m-run strategy with pages as arms

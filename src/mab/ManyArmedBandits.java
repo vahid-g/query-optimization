@@ -40,22 +40,24 @@ public class ManyArmedBandits {
 	private int[] readPagesForK;
 
 	// args[0] can be "mrun" or "nested"
+	// args[1] is k
+	// args[2] is the page size
 	public static void main(String[] args) throws IOException {
 		int[] randSeed = { 5, 6, 20, 666, 69 };
 		double[] result = new double[4];
 		for (int r : randSeed) {
 			double[] partial;
 			if (args[0].equals("mrun")) {
-				partial = new ManyArmedBandits(ARTICLE_LINK_SIZE / 2, 64).mRunPaged(r);
+				partial = new ManyArmedBandits(Integer.parseInt(args[1]), Integer.parseInt(args[2])).mRunPaged(r);
 			} else {
-				partial = new ManyArmedBandits(ARTICLE_LINK_SIZE / 2, 64).nestedLoop(r);
+				partial = new ManyArmedBandits(Integer.parseInt(args[1]), Integer.parseInt(args[2])).nestedLoop(r);
 			}
 			for (int i = 0; i < result.length; i++) {
 				result[i] += partial[i];
 			}
 		}
 		System.out.println("===========");
-		System.out.println("average article pages, link pages and discounted average:");
+		System.out.println("average article pages, link pages, discounted average and time:");
 		for (int i = 0; i < result.length; i++) {
 			result[i] /= randSeed.length;
 		}
@@ -63,12 +65,13 @@ public class ManyArmedBandits {
 	}
 
 	public ManyArmedBandits(int k, int p) {
-		this.resultSizeK = k;
-		this.pageSize = p;
+		resultSizeK = k;
+		pageSize = p;
 		readPagesForK = new int[resultSizeK];
+		System.out.println("MAB initialized with k = " + resultSizeK + " page-size = ");
 	}
 
-	static void runExperiment(String method) throws IOException {
+	public static void runExperiment(String method) throws IOException {
 		int[] kValues = { 100, 1000 };
 		int[] pageSizeValues = { 64, 256 };
 		int[] randSeed = { 3, 5, 8, 22, 23, 2, 1000, 66 };
@@ -156,7 +159,6 @@ public class ManyArmedBandits {
 						int articleLinkId = articleLinkBufferList.get(i).articleId;
 						if (currentPage.idSet.contains(articleLinkBufferList.get(i).articleId)) {
 							results.add(articleLinkId + "-" + articleLinkBufferList.get(i).linkId);
-							// discAverage += Math.pow(discFactor, results.size()) * readArticleLinkPages;
 							readPagesForK[results.size() - 1] = readArticleLinkPages + readArticleLinkPages;
 							currentSuccessCount++;
 							successfulPrevJoin = true;
@@ -175,7 +177,8 @@ public class ManyArmedBandits {
 						+ " size: " + results.size());
 				System.out.println("  running phase two");
 				int phaseTwoIterations = 0;
-				while (results.size() < resultSizeK) {
+				boolean articleTableExhausted = false;
+				while (results.size() < resultSizeK && !activePageHeap.isEmpty()) {
 					phaseTwoIterations++;
 					// find the best page
 					RelationPage bestPage = activePageHeap.poll();
@@ -193,12 +196,12 @@ public class ManyArmedBandits {
 							int linkArticleId = wholeLinkSelectResult.getInt(1);
 							if (articleIds.contains(linkArticleId)) {
 								results.add(linkArticleId + "-" + wholeLinkSelectResult.getInt(2));
-								// discAverage += Math.pow(discFactor, results.size()) * readArticleLinkPages;
 								readPagesForK[results.size() - 1] = readArticleLinkPages + readArticleLinkPages;
 							}
 						}
-						System.out.println("    inner article-link pages scanned: " + (linkCounter / pageSize));
-						System.out.println("    result size: " + results.size());
+						// System.out.println(" inner article-link pages scanned: " + (linkCounter /
+						// pageSize));
+						// System.out.println(" result size: " + results.size());
 						readArticleLinkPages += (linkCounter / pageSize);
 						try {
 							wholeLinkSelectResult.close();
@@ -211,35 +214,36 @@ public class ManyArmedBandits {
 						break;
 					}
 
-					// read new article page
-					currentPage = readNextArticlePage(articleSelectResult);
-					if (currentPage.idSet.size() == 0) {
-						System.out.println("    reached end of article!!!");
-						break;
-					}
-					// read new article-link page
-					articleLinkBufferList = readNextArticleLinkPage(linkSelectResult);
-					if (articleLinkBufferList.size() == 0) {
-						System.out.println("    reached end of article-link!!!");
-						break;
-					}
-					// join new page with next article-link page
-					currentSuccessCount = 0;
-					for (int i = 0; i < articleLinkBufferList.size(); i++) {
-						int articleLinkId = articleLinkBufferList.get(i).articleId;
-						if (currentPage.idSet.contains(articleLinkId)) {
-							results.add(articleLinkId + "-" + articleLinkBufferList.get(i).linkId);
-							// discAverage += Math.pow(discFactor, results.size()) * readArticleLinkPages;
-							if (results.size() > resultSizeK) {
-								break;
-							}
-							readPagesForK[results.size() - 1] = readArticleLinkPages + readArticleLinkPages;
-							currentSuccessCount++;
-
+					if (!articleTableExhausted) {
+						// read new article page
+						currentPage = readNextArticlePage(articleSelectResult);
+						if (currentPage.idSet.size() == 0) {
+							System.out.println("    reached end of article!!!");
+							continue;
 						}
+						// read new article-link page
+						articleLinkBufferList = readNextArticleLinkPage(linkSelectResult);
+						if (articleLinkBufferList.size() > 0) {
+							System.out.println("    reached end of article-link!!!");
+							continue;
+						}
+						// join new page with next article-link page
+						currentSuccessCount = 0;
+						for (int i = 0; i < articleLinkBufferList.size(); i++) {
+							int articleLinkId = articleLinkBufferList.get(i).articleId;
+							if (currentPage.idSet.contains(articleLinkId)) {
+								results.add(articleLinkId + "-" + articleLinkBufferList.get(i).linkId);
+								if (results.size() > resultSizeK) {
+									break;
+								}
+								readPagesForK[results.size() - 1] = readArticleLinkPages + readArticleLinkPages;
+								currentSuccessCount++;
+
+							}
+						}
+						currentPage.value = currentSuccessCount;
+						activePageHeap.add(currentPage);
 					}
-					currentPage.value = currentSuccessCount;
-					activePageHeap.add(currentPage);
 				}
 				runtime = System.currentTimeMillis() - start;
 				System.out.println("  phase two iterations: " + phaseTwoIterations);
@@ -266,7 +270,7 @@ public class ManyArmedBandits {
 			e.printStackTrace();
 		}
 		return new double[] { readArticlePages, readArticleLinkPages, readArticlePages + readArticleLinkPages,
-				getDiscountedAverage() };
+				getDiscountedAverage(), runtime };
 	}
 
 	private double getDiscountedAverage() {
@@ -274,7 +278,7 @@ public class ManyArmedBandits {
 		for (int j = 0; j < this.resultSizeK; j++) {
 			discAverageK += Math.pow(0.9, j) * this.readPagesForK[j];
 		}
-		return discAverageK;
+		return Math.round(discAverageK * 100) / 100;
 	}
 
 	private List<ArticleLinkDAO> readNextArticleLinkPage(ResultSet linkSelectResult) throws SQLException {
@@ -299,6 +303,7 @@ public class ManyArmedBandits {
 
 	private double[] nestedLoop(int randSeed) {
 		List<String> results = new ArrayList<String>();
+		long runtime = 0;
 		try (Connection connection1 = DatabaseManager.createConnection();
 				Connection connection2 = DatabaseManager.createConnection()) {
 			try (Statement articleSelect = connection1.createStatement();
@@ -310,6 +315,7 @@ public class ManyArmedBandits {
 						.executeQuery("SELECT id FROM " + ARTICLE_TABLE + " order by rand(" + randSeed + ");");
 				ResultSet linkSelectResult = linkSelect.executeQuery(
 						"SELECT article_id, link_id FROM " + ARTICLE_LINK_TABLE + " order by rand(" + randSeed + ");");
+				long start = System.currentTimeMillis();
 				while (results.size() < resultSizeK) {
 					RelationPage articlePage = readNextArticlePage(articleSelectResult);
 					List<ArticleLinkDAO> articleLinkList;
@@ -331,6 +337,7 @@ public class ManyArmedBandits {
 					} // end inner loop of the join
 					linkSelectResult.first();
 				} // end outer loop of the join
+				runtime = System.currentTimeMillis() - start;
 				System.out.println("  read articles: " + readArticles);
 				System.out.println("  read article pages: " + readArticlePages);
 				System.out.println("  read article links: " + readArticleLinks);
@@ -345,7 +352,7 @@ public class ManyArmedBandits {
 		}
 		System.out.println("read articles: " + readArticles);
 		return new double[] { readArticlePages, readArticleLinkPages, readArticlePages + readArticleLinkPages,
-				getDiscountedAverage() };
+				getDiscountedAverage(), runtime };
 	}
 
 	static class RelationPage {

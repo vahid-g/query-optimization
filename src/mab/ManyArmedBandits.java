@@ -45,7 +45,7 @@ public class ManyArmedBandits {
 	public static void main(String[] args) throws IOException {
 		int[] articleRandSeed = { 5, 6, 20, 666, 69 };
 		int[] linkRandSeed = { 91, 17, 7, 68, 59 };
-		double[] result = new double[4];
+		double[] result = new double[7];
 		for (int i = 0; i < articleRandSeed.length; i++) {
 			double[] partial;
 			if (args[0].equals("mrun")) {
@@ -227,10 +227,12 @@ public class ManyArmedBandits {
 							continue;
 						}
 						currentSuccessCount = 0;
-						do {
+						boolean shouldContinueWithCurrentArticlePage = true;
+						while (shouldContinueWithCurrentArticlePage) {
+							shouldContinueWithCurrentArticlePage = false;
 							// read new article-link page
 							articleLinkBufferList = readNextArticleLinkPage(linkSelectResult);
-							if (articleLinkBufferList.size() > 0) {
+							if (articleLinkBufferList.size() == 0) {
 								System.out.println("    reached end of article-link!!!");
 								linkTableExhausted = true;
 								break;
@@ -239,16 +241,16 @@ public class ManyArmedBandits {
 							for (int i = 0; i < articleLinkBufferList.size(); i++) {
 								int articleLinkId = articleLinkBufferList.get(i).articleId;
 								if (currentPage.idSet.contains(articleLinkId)) {
+									shouldContinueWithCurrentArticlePage = true;
 									results.add(articleLinkId + "-" + articleLinkBufferList.get(i).linkId);
-									if (results.size() > resultSizeK) {
+									if (results.size() >= resultSizeK) {
 										break;
 									}
 									readPagesForK[results.size() - 1] = readArticleLinkPages + readArticleLinkPages;
 									currentSuccessCount++;
-
 								}
 							}
-						} while (currentSuccessCount > 0);
+						}
 						currentPage.value = currentSuccessCount;
 						activePageHeap.add(currentPage);
 					}
@@ -277,13 +279,21 @@ public class ManyArmedBandits {
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
-		return new double[] { readArticlePages, readArticleLinkPages, readArticlePages + readArticleLinkPages,
-				getDiscountedAverage(), runtime };
+		return new double[] { readArticlePages, readArticleLinkPages, readPagesForK[results.size() - 1],
+				getDiscountedAverage(), runtime, readPagesForK[results.size() / 2], getHalfDiscountedAverage() };
 	}
 
 	private double getDiscountedAverage() {
 		double discAverageK = 0;
 		for (int j = 0; j < this.resultSizeK; j++) {
+			discAverageK += Math.pow(0.9, j) * this.readPagesForK[j];
+		}
+		return Math.round(discAverageK * 100) / 100;
+	}
+
+	private double getHalfDiscountedAverage() {
+		double discAverageK = 0;
+		for (int j = 0; j < this.resultSizeK / 2; j++) {
 			discAverageK += Math.pow(0.9, j) * this.readPagesForK[j];
 		}
 		return Math.round(discAverageK * 100) / 100;
@@ -359,8 +369,8 @@ public class ManyArmedBandits {
 			e.printStackTrace();
 		}
 		System.out.println("read articles: " + readArticles);
-		return new double[] { readArticlePages, readArticleLinkPages, readArticlePages + readArticleLinkPages,
-				getDiscountedAverage(), runtime };
+		return new double[] { readArticlePages, readArticleLinkPages, readPagesForK[results.size() - 1],
+				getDiscountedAverage(), runtime, readPagesForK[results.size() / 2], getHalfDiscountedAverage() };
 	}
 
 	static class RelationPage {

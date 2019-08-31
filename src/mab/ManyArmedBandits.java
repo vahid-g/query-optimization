@@ -43,23 +43,26 @@ public class ManyArmedBandits {
 	// args[1] is k
 	// args[2] is the page size
 	public static void main(String[] args) throws IOException {
-		int[] randSeed = { 5, 6, 20, 666, 69 };
+		int[] articleRandSeed = { 5, 6, 20, 666, 69 };
+		int[] linkRandSeed = { 91, 17, 7, 68, 59 };
 		double[] result = new double[4];
-		for (int r : randSeed) {
+		for (int i = 0; i < articleRandSeed.length; i++) {
 			double[] partial;
 			if (args[0].equals("mrun")) {
-				partial = new ManyArmedBandits(Integer.parseInt(args[1]), Integer.parseInt(args[2])).mRunPaged(r);
+				partial = new ManyArmedBandits(Integer.parseInt(args[1]), Integer.parseInt(args[2]))
+						.mRunPaged(articleRandSeed[i], linkRandSeed[i]);
 			} else {
-				partial = new ManyArmedBandits(Integer.parseInt(args[1]), Integer.parseInt(args[2])).nestedLoop(r);
+				partial = new ManyArmedBandits(Integer.parseInt(args[1]), Integer.parseInt(args[2]))
+						.nestedLoop(articleRandSeed[i], linkRandSeed[i]);
 			}
-			for (int i = 0; i < result.length; i++) {
-				result[i] += partial[i];
+			for (int j = 0; j < result.length; j++) {
+				result[j] += partial[j];
 			}
 		}
 		System.out.println("===========");
 		System.out.println("average article pages, link pages, discounted average and time:");
 		for (int i = 0; i < result.length; i++) {
-			result[i] /= randSeed.length;
+			result[i] /= articleRandSeed.length;
 		}
 		System.out.println(Arrays.toString(result));
 	}
@@ -67,7 +70,7 @@ public class ManyArmedBandits {
 	public static void runExperiment(String method) throws IOException {
 		int[] kValues = { 100, 1000 };
 		int[] pageSizeValues = { 64, 256 };
-		int[] randSeed = { 3, 5, 8, 22, 23, 2, 1000, 66 };
+		int[] randSeed = { 3, 5, 8, 22, 23 };
 		StringBuilder sb = new StringBuilder();
 		sb.append("k, page-size, article-pages, link-pages, total-pages, time, result-size\r\n");
 		for (int p : pageSizeValues) {
@@ -80,9 +83,9 @@ public class ManyArmedBandits {
 					System.out.println(" Starting experiment #" + i + " at: " + new Date().toString());
 					ManyArmedBandits mab = new ManyArmedBandits(k, p);
 					if (method.equals("mrun")) {
-						partial = mab.mRunPaged(randSeed[i]);
+						partial = mab.mRunPaged(randSeed[i], randSeed[i]);
 					} else {
-						partial = mab.nestedLoop(randSeed[i]);
+						partial = mab.nestedLoop(randSeed[i], randSeed[i]);
 					}
 					for (int j = 0; j < 5; j++) {
 						result[j] += partial[j];
@@ -112,7 +115,7 @@ public class ManyArmedBandits {
 	}
 
 	// m-run strategy with pages as arms
-	private double[] mRunPaged(int randSeed) {
+	private double[] mRunPaged(int artccileRandSeed, int linkRandSeed) {
 		List<String> results = new ArrayList<String>();
 		long runtime = -1;
 		try (Connection connection1 = DatabaseManager.createConnection();
@@ -122,9 +125,9 @@ public class ManyArmedBandits {
 					Statement linkSelect = connection2.createStatement()) {
 				linkSelect.setFetchSize(Integer.MIN_VALUE);
 				ResultSet articleSelectResult = articleSelect
-						.executeQuery("SELECT id FROM " + ARTICLE_TABLE + " order by rand(" + randSeed + ");");
-				ResultSet linkSelectResult = linkSelect.executeQuery(
-						"SELECT article_id, link_id FROM " + ARTICLE_LINK_TABLE + " order by rand(" + randSeed + ");");
+						.executeQuery("SELECT id FROM " + ARTICLE_TABLE + " order by rand(" + artccileRandSeed + ");");
+				ResultSet linkSelectResult = linkSelect.executeQuery("SELECT article_id, link_id FROM "
+						+ ARTICLE_LINK_TABLE + " order by rand(" + linkRandSeed + ");");
 				double m = Math.sqrt(ARTICLE_LINK_SIZE / pageSize);
 				System.out.printf("  estimated n = %d m = %.0f \r\n", (ARTICLE_LINK_SIZE / pageSize), m);
 				PriorityQueue<RelationPage> activePageHeap = new PriorityQueue<RelationPage>(pageSize,
@@ -178,6 +181,7 @@ public class ManyArmedBandits {
 				System.out.println("  running phase two");
 				int phaseTwoIterations = 0;
 				boolean articleTableExhausted = false;
+				boolean linkTableExhausted = false;
 				while (results.size() < resultSizeK && !activePageHeap.isEmpty()) {
 					phaseTwoIterations++;
 					// find the best page
@@ -189,7 +193,7 @@ public class ManyArmedBandits {
 					try (Statement wholeLinkSelect = connection3.createStatement()) {
 						ResultSet wholeLinkSelectResult = wholeLinkSelect
 								.executeQuery("SELECT article_id, link_id FROM " + ARTICLE_LINK_TABLE
-										+ " order by rand(" + randSeed + ");");
+										+ " order by rand(" + linkRandSeed + ");");
 						int linkCounter = 0;
 						while (wholeLinkSelectResult.next() && results.size() < resultSizeK) {
 							linkCounter++;
@@ -214,33 +218,37 @@ public class ManyArmedBandits {
 						break;
 					}
 
-					if (!articleTableExhausted) {
+					if (!articleTableExhausted && !linkTableExhausted) {
 						// read new article page
 						currentPage = readNextArticlePage(articleSelectResult);
 						if (currentPage.idSet.size() == 0) {
 							System.out.println("    reached end of article!!!");
+							articleTableExhausted = true;
 							continue;
 						}
-						// read new article-link page
-						articleLinkBufferList = readNextArticleLinkPage(linkSelectResult);
-						if (articleLinkBufferList.size() > 0) {
-							System.out.println("    reached end of article-link!!!");
-							continue;
-						}
-						// join new page with next article-link page
 						currentSuccessCount = 0;
-						for (int i = 0; i < articleLinkBufferList.size(); i++) {
-							int articleLinkId = articleLinkBufferList.get(i).articleId;
-							if (currentPage.idSet.contains(articleLinkId)) {
-								results.add(articleLinkId + "-" + articleLinkBufferList.get(i).linkId);
-								if (results.size() > resultSizeK) {
-									break;
-								}
-								readPagesForK[results.size() - 1] = readArticleLinkPages + readArticleLinkPages;
-								currentSuccessCount++;
-
+						do {
+							// read new article-link page
+							articleLinkBufferList = readNextArticleLinkPage(linkSelectResult);
+							if (articleLinkBufferList.size() > 0) {
+								System.out.println("    reached end of article-link!!!");
+								linkTableExhausted = true;
+								break;
 							}
-						}
+							// join new page with next article-link page
+							for (int i = 0; i < articleLinkBufferList.size(); i++) {
+								int articleLinkId = articleLinkBufferList.get(i).articleId;
+								if (currentPage.idSet.contains(articleLinkId)) {
+									results.add(articleLinkId + "-" + articleLinkBufferList.get(i).linkId);
+									if (results.size() > resultSizeK) {
+										break;
+									}
+									readPagesForK[results.size() - 1] = readArticleLinkPages + readArticleLinkPages;
+									currentSuccessCount++;
+
+								}
+							}
+						} while (currentSuccessCount > 0);
 						currentPage.value = currentSuccessCount;
 						activePageHeap.add(currentPage);
 					}
@@ -257,7 +265,7 @@ public class ManyArmedBandits {
 					System.out.println("  started manual closing");
 					while (linkSelectResult.next())
 						; // do nothing
-					linkSelectResult.close();
+					linkSelect.close();
 				} catch (SQLException e) {
 					System.err.println("  couldn't close outer resultset!!!");
 					e.printStackTrace();
@@ -301,7 +309,7 @@ public class ManyArmedBandits {
 		return currentPage;
 	}
 
-	private double[] nestedLoop(int randSeed) {
+	private double[] nestedLoop(int articleRandSeed, int linkRandSeed) {
 		List<String> results = new ArrayList<String>();
 		long runtime = 0;
 		try (Connection connection1 = DatabaseManager.createConnection();
@@ -312,9 +320,9 @@ public class ManyArmedBandits {
 				System.out.println("Default fetch size for articles: " + articleSelect.getFetchSize());
 				linkSelect.setFetchSize(Integer.MIN_VALUE);
 				ResultSet articleSelectResult = articleSelect
-						.executeQuery("SELECT id FROM " + ARTICLE_TABLE + " order by rand(" + randSeed + ");");
-				ResultSet linkSelectResult = linkSelect.executeQuery(
-						"SELECT article_id, link_id FROM " + ARTICLE_LINK_TABLE + " order by rand(" + randSeed + ");");
+						.executeQuery("SELECT id FROM " + ARTICLE_TABLE + " order by rand(" + articleRandSeed + ");");
+				ResultSet linkSelectResult = linkSelect.executeQuery("SELECT article_id, link_id FROM "
+						+ ARTICLE_LINK_TABLE + " order by rand(" + linkRandSeed + ");");
 				long start = System.currentTimeMillis();
 				while (results.size() < resultSizeK) {
 					RelationPage articlePage = readNextArticlePage(articleSelectResult);

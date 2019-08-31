@@ -18,7 +18,8 @@ import java.util.Set;
 
 import database.DatabaseManager;
 
-// many armed bandit strategies
+// Experiments for evaluating the performance of many armed bandit based join algorithms. 
+// The experiments are implemented for Article and Link tables of Wikipedia dataset.
 public class ManyArmedBandits {
 
 	// static final String ARTICLE_TABLE = "tbl_article_09";
@@ -108,6 +109,7 @@ public class ManyArmedBandits {
 		}
 	}
 
+	// constructor
 	public ManyArmedBandits(int k, int p) {
 		resultSizeK = k;
 		pageSize = p;
@@ -115,7 +117,11 @@ public class ManyArmedBandits {
 		System.out.println("MAB initialized with k = " + resultSizeK + " page-size = " + p);
 	}
 
-	// m-run strategy with pages as arms
+	// m-run strategy with pages of first relation as arms
+	// the return array contains read article pages count, read article-link pages
+	// count, total read pages, discounted average of read pages, experiment time,
+	// total read pages to produce half of the joins, discounted average of read
+	// pages to produces half of the join results
 	private double[] mRunPaged(int artccileRandSeed, int linkRandSeed) {
 		List<String> results = new ArrayList<String>();
 		long runtime = -1;
@@ -228,6 +234,8 @@ public class ManyArmedBandits {
 				getDiscountedAverage(), runtime, readPagesForK[results.size() / 2], getHalfDiscountedAverage() };
 	}
 
+	// explores one article page by joining it with article-link pages as far as
+	// it's producing results
 	private int oneRun(ResultSet linkSelectResult, RelationPage currentPage, List<String> results) throws SQLException {
 		int joinCount = 0;
 		boolean shouldContinueWithCurrentArticlePage = true;
@@ -257,6 +265,7 @@ public class ManyArmedBandits {
 		return joinCount;
 	}
 
+	// discounted average of the read pages
 	private double getDiscountedAverage() {
 		double discAverageK = 0;
 		for (int j = 0; j < this.resultSizeK; j++) {
@@ -265,6 +274,7 @@ public class ManyArmedBandits {
 		return Math.round(discAverageK * 100) / 100;
 	}
 
+	// discounted average of the read pages to produce half of the joins
 	private double getHalfDiscountedAverage() {
 		double discAverageK = 0;
 		for (int j = 0; j < this.resultSizeK / 2; j++) {
@@ -273,6 +283,7 @@ public class ManyArmedBandits {
 		return Math.round(discAverageK * 100) / 100;
 	}
 
+	// reads a page from article-link relation
 	private List<ArticleLinkDAO> readNextArticleLinkPage(ResultSet linkSelectResult) throws SQLException {
 		List<ArticleLinkDAO> articleLinkBufferList = new ArrayList<ArticleLinkDAO>();
 		while (articleLinkBufferList.size() < pageSize && linkSelectResult.next()) {
@@ -283,6 +294,7 @@ public class ManyArmedBandits {
 		return articleLinkBufferList;
 	}
 
+	// reads a page from article table
 	private RelationPage readNextArticlePage(ResultSet articleSelectResult) throws SQLException {
 		RelationPage currentPage = new RelationPage();
 		while (currentPage.idSet.size() < pageSize && articleSelectResult.next()) {
@@ -293,6 +305,7 @@ public class ManyArmedBandits {
 		return currentPage;
 	}
 
+	// runs nested loop join and produces the join statistics similar to mRun method
 	private double[] nestedLoop(int articleRandSeed, int linkRandSeed) {
 		List<String> results = new ArrayList<String>();
 		long runtime = 0;
@@ -347,6 +360,7 @@ public class ManyArmedBandits {
 				getDiscountedAverage(), runtime, readPagesForK[results.size() / 2], getHalfDiscountedAverage() };
 	}
 
+	// Stores info for an article page
 	static class RelationPage {
 		Set<Integer> idSet;
 		Integer value = 0;
@@ -361,6 +375,7 @@ public class ManyArmedBandits {
 		}
 	}
 
+	// Stores information of an article-link tuple
 	static class ArticleLinkDAO {
 		int articleId = 0;
 		int linkId = 0;
@@ -369,10 +384,6 @@ public class ManyArmedBandits {
 			this.articleId = articleId;
 			this.linkId = linkId;
 		}
-	}
-
-	static enum ExperimentMode {
-		M_RUN, M_LEARNING, NON_REC
 	}
 
 }

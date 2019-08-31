@@ -11,9 +11,14 @@ import java.util.List;
 import java.util.Map;
 
 import database.DatabaseManager;
-import mab.ManyArmedBandits.ExperimentMode;
 
 public class ManyArmedBanditsInitial {
+	
+
+	static enum ExperimentMode {
+		M_RUN, M_LEARNING, NON_REC
+	}
+
 
 	public void mabJoinExperiment(String[] args) {
 		if (args.length == 0 || args[0].equals("mrun")) {

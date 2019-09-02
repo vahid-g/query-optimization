@@ -123,7 +123,8 @@ public class ManyArmedBandits {
 	// total read pages to produce half of the joins, discounted average of read
 	// pages to produces half of the join results
 	private double[] mRunPaged(int artccileRandSeed, int linkRandSeed) {
-		List<String> results = new ArrayList<String>();
+		// List<String> results = new ArrayList<String>();
+		Set<String> results = new HashSet<String>();
 		long runtime = -1;
 		try (Connection connection1 = DatabaseManager.createConnection();
 				Connection connection2 = DatabaseManager.createConnection();
@@ -235,7 +236,7 @@ public class ManyArmedBandits {
 
 	// explores one article page by joining it with article-link pages as far as
 	// it's producing results
-	private int oneRun(ResultSet linkSelectResult, RelationPage currentPage, List<String> results) throws SQLException {
+	private int oneRun(ResultSet linkSelectResult, RelationPage currentPage, Set<String> results) throws SQLException {
 		int joinCount = 0;
 		boolean shouldContinueWithCurrentArticlePage = true;
 		while (shouldContinueWithCurrentArticlePage) {

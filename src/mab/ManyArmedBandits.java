@@ -174,7 +174,6 @@ public class ManyArmedBandits {
 					phaseTwoIterations++;
 					// find and the best active article page
 					RelationPage bestPage = activePageHeap.poll();
-					System.out.println("    value of best page: " + bestPage.value);
 					Set<Integer> articleIds = bestPage.idSet;
 					try (Statement wholeLinkSelect = connection3.createStatement()) {
 						ResultSet wholeLinkSelectResult = wholeLinkSelect
